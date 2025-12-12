@@ -1,11 +1,16 @@
 // src/routes/authRoutes.js
 import { Router } from "express";
-import { handleLogin, handleGetMe } from "../controllers/authController.js";
+import {
+  handleLogin,
+  handleSendCode,
+  handleGetMe,
+} from "../controllers/authController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
 // Public routes
+router.post("/send-code", handleSendCode);
 router.post("/login", handleLogin);
 
 // Protected routes (require authentication)

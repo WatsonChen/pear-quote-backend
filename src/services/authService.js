@@ -1,8 +1,9 @@
 // src/services/authService.js
-import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { signToken } from "../lib/jwt.js";
+import crypto from "crypto";
+import bcrypt from "bcrypt"; // Keep for createUser if needed for tests, but mainly unused
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -10,33 +11,81 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
-const BCRYPT_ROUNDS = 10;
+/**
+ * Generate a random 6-digit numeric code
+ */
+function generateOTP() {
+  return crypto.randomInt(100000, 999999).toString();
+}
 
 /**
- * Login user with email and password
- * @param {string} email - User email
- * @param {string} password - Plain text password
- * @returns {Promise<{token: string, user: {id: string, email: string}}>}
- * @throws {Error} If credentials are invalid
+ * Send a login code to the given email
+ * @param {string} email
+ * @returns {Promise<void>}
  */
-export async function login(email, password) {
-  // Find user by email
+export async function sendLoginCode(email) {
+  const code = generateOTP();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+
+  // Upsert user: create if not exists, otherwise update OTP
+  // Note: We don't require a password anymore.
+  await prisma.user.upsert({
+    where: { email },
+    update: {
+      otpCode: code,
+      otpExpiresAt: expiresAt,
+    },
+    create: {
+      email,
+      otpCode: code,
+      otpExpiresAt: expiresAt,
+      // passwordHash is optional now, so we can omit it or set null
+    },
+  });
+
+  // TODO: Integrate with a real email service (e.g., SendGrid, AWS SES)
+  console.log(`[MOCK EMAIL] Login code for ${email}: ${code}`);
+}
+
+/**
+ * Verify the login code and return a token
+ * @param {string} email
+ * @param {string} code
+ * @returns {Promise<{token: string, user: {id: string, email: string}}>}
+ */
+export async function verifyLoginCode(email, code) {
   const user = await prisma.user.findUnique({
     where: { email },
   });
 
   if (!user) {
-    throw new Error("Invalid email or password");
+    throw new Error("Invalid email or code");
   }
 
-  // Verify password
-  const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-
-  if (!isPasswordValid) {
-    throw new Error("Invalid email or password");
+  if (!user.otpCode || !user.otpExpiresAt) {
+    throw new Error("Invalid email or code");
   }
 
-  // Generate JWT token
+  // Check if code matches
+  if (user.otpCode !== code) {
+    throw new Error("Invalid email or code");
+  }
+
+  // Check if expired
+  if (new Date() > user.otpExpiresAt) {
+    throw new Error("Code has expired");
+  }
+
+  // Clear OTP after successful use
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      otpCode: null,
+      otpExpiresAt: null,
+    },
+  });
+
+  // Generate Token
   const token = signToken({
     userId: user.id,
     email: user.email,
@@ -53,9 +102,6 @@ export async function login(email, password) {
 
 /**
  * Get user by ID
- * @param {string} userId - User ID
- * @returns {Promise<{id: string, email: string, createdAt: Date}>}
- * @throws {Error} If user not found
  */
 export async function getUserById(userId) {
   const user = await prisma.user.findUnique({
@@ -70,29 +116,6 @@ export async function getUserById(userId) {
   if (!user) {
     throw new Error("User not found");
   }
-
-  return user;
-}
-
-/**
- * Create a new user (for testing purposes)
- * @param {string} email - User email
- * @param {string} password - Plain text password
- * @returns {Promise<{id: string, email: string}>}
- */
-export async function createUser(email, password) {
-  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-
-  const user = await prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-    },
-    select: {
-      id: true,
-      email: true,
-    },
-  });
 
   return user;
 }

@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import quoteRoutes from "./routes/quoteRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import baseRoutes from "./routes/baseRoutes.js";
 
 const app = express();
 
@@ -10,12 +11,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Basic test route
-app.get("/", (req, res) => {
-  res.send({ message: "PearQuote backend is running" });
-});
-
-// API routes
+// Routes
+app.use("/", baseRoutes);
 app.use("/api", authRoutes);
 app.use("/api/quotes", quoteRoutes);
 

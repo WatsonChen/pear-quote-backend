@@ -1,24 +1,58 @@
 // src/controllers/authController.js
-import { login, getUserById } from "../services/authService.js";
+import {
+  sendLoginCode,
+  verifyLoginCode,
+  getUserById,
+} from "../services/authService.js";
 
 /**
- * Handle login request
+ * Send login verification code
+ * POST /api/auth/send-code
+ */
+export async function handleSendCode(req, res) {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    await sendLoginCode(email);
+
+    return res.json({
+      success: true,
+      message: "Verification code sent",
+    });
+  } catch (error) {
+    console.error("Send code error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+/**
+ * Handle login (verify code)
  * POST /api/login
  */
 export async function handleLogin(req, res) {
   try {
-    const { email, password } = req.body;
+    const { email, code } = req.body;
 
     // Validate input
-    if (!email || !password) {
+    if (!email || !code) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required",
+        message: "Email and code are required",
       });
     }
 
-    // Attempt login
-    const result = await login(email, password);
+    // Attempt login (verify code)
+    const result = await verifyLoginCode(email, code);
 
     return res.json({
       success: true,
@@ -26,8 +60,11 @@ export async function handleLogin(req, res) {
       user: result.user,
     });
   } catch (error) {
-    // Check if it's an authentication error
-    if (error.message === "Invalid email or password") {
+    // Check for specific errors
+    if (
+      error.message === "Invalid email or code" ||
+      error.message === "Code has expired"
+    ) {
       return res.status(401).json({
         success: false,
         message: error.message,
@@ -35,7 +72,7 @@ export async function handleLogin(req, res) {
     }
 
     // Server error
-    console.error("Login error:", error);
+    console.error("Login verification error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

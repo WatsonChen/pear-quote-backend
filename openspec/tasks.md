@@ -12,3 +12,4 @@
   - [x] Implement login API
   - [x] Implement get current user API
   - [x] Update API documentation
+  - [x] Refactor to Passwordless (OTP) Auth
