@@ -41,7 +41,7 @@ components:
           type: string
 
 paths:
-  /auth/sentotp:
+  /sentotp:
     post:
       summary: Send OTP verification code
       description: Send a one-time password to the user's email for login
@@ -81,7 +81,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /auth/login:
+  /login:
     post:
       summary: Login with OTP
       description: Authenticate user with email and OTP code
@@ -127,7 +127,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /auth/me:
+  /me:
     get:
       summary: Get current user profile
       description: Retrieve the profile of the currently authenticated user
