@@ -1,15 +1,8 @@
 // src/services/authService.js
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import prisma from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // Keep for createUser if needed for tests, but mainly unused
-
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
-});
-
-const prisma = new PrismaClient({ adapter });
 
 /**
  * Generate a random 6-digit numeric code
