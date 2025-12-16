@@ -13,3 +13,4 @@
   - [x] Implement get current user API
   - [x] Update API documentation
   - [x] Refactor to Passwordless (OTP) Auth
+  - [x] Implement Swagger Documentation

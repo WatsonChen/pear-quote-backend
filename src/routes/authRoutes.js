@@ -10,7 +10,7 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 const router = Router();
 
 // Public routes
-router.post("/send-code", handleSendCode);
+router.post("/sentotp", handleSendCode);
 router.post("/login", handleLogin);
 
 // Protected routes (require authentication)

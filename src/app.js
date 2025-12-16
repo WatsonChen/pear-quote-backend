@@ -16,4 +16,9 @@ app.use("/", baseRoutes);
 app.use("/api", authRoutes);
 app.use("/api/quotes", quoteRoutes);
 
+// Swagger Documentation
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./config/swagger.js";
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 export default app;
