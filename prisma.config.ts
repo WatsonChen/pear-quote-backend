@@ -3,11 +3,11 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-// Prefer DIRECT_URL (used by Prisma Data Proxy/Vercel Postgres), fall back to common Postgres env names.
-// Use a placeholder URL during build time (prisma generate doesn't need a real connection)
+// Prisma 7: datasource URLs belong in prisma.config.ts (not schema.prisma).
+// Provide a safe placeholder for build; generate does not connect to the DB.
 const databaseUrl =
-  process.env.DIRECT_URL ||
   process.env.DATABASE_URL ||
+  process.env.DIRECT_URL ||
   process.env.POSTGRES_PRISMA_URL ||
   process.env.POSTGRES_URL_NON_POOLING ||
   "postgresql://placeholder:placeholder@localhost:5432/placeholder";
