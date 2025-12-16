@@ -1,26 +1,27 @@
-import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
-// Load environment variables
 dotenv.config();
 
-// Singleton approach for PrismaClient to avoid multiple instances
-// especially in development (hot reload)
-// Reference: https://www.prisma.io/docs/guides/other/troubleshooting-orm/help-articles/nextjs-prisma-client-dev-practices
+/**
+ * Prisma + Supabase (pgbouncer) + Vercel
+ * 官方推薦寫法
+ */
 
-const globalForPrisma = global;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const adapter = new PrismaPg(pool);
+
+const globalForPrisma = globalThis;
 
 const prisma =
-  globalForPrisma.prisma ||
+  globalForPrisma.prisma ??
   new PrismaClient({
-    datasources: {
-      db: {
-        url:
-          process.env.DATABASE_URL ||
-          process.env.POSTGRES_PRISMA_URL ||
-          process.env.DIRECT_URL,
-      },
-    },
+    adapter,
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "error", "warn"]
