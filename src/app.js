@@ -28,6 +28,27 @@ app.use("/api/quotes", quoteRoutes);
 // Swagger Documentation
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.js";
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Expose OpenAPI spec as JSON at root level
+app.get("/doc.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerSpec);
+});
+
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(null, {
+    explorer: true,
+    swaggerOptions: {
+      urls: [
+        {
+          url: "/doc.json",
+          name: "Pear Backend API",
+        },
+      ],
+    },
+  })
+);
 
 export default app;
