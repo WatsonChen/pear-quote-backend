@@ -75,7 +75,7 @@ export async function handleLogin(req, res) {
     console.error("Login verification error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: error.message || "Internal server error",
     });
   }
 }
