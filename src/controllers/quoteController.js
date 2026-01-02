@@ -19,7 +19,10 @@ export async function createQuote(req, res) {
     const userId = req.user.userId; // From authMiddleware
 
     // Calculate total amount
-    const totalAmount = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+    const totalAmount = items.reduce(
+      (sum, item) => sum + (item.amount || 0),
+      0
+    );
     // Calculate total cost (assuming hourlyRate is cost for now, or we need a separate cost field)
     // For now, let's assume margin is calculated elsewhere or we need more inputs.
     // But based on schema, we have totalMargin and totalCost.

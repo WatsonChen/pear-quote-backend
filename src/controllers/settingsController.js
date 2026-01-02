@@ -63,8 +63,12 @@ export async function updateSettings(req, res) {
           seniorRate: seniorRate ? parseFloat(seniorRate) : undefined,
           pmRate: pmRate ? parseFloat(pmRate) : undefined,
           designRate: designRate ? parseFloat(designRate) : undefined,
-          targetMarginMin: targetMarginMin ? parseFloat(targetMarginMin) : undefined,
-          targetMarginMax: targetMarginMax ? parseFloat(targetMarginMax) : undefined,
+          targetMarginMin: targetMarginMin
+            ? parseFloat(targetMarginMin)
+            : undefined,
+          targetMarginMax: targetMarginMax
+            ? parseFloat(targetMarginMax)
+            : undefined,
         },
       });
     } else {
@@ -77,8 +81,12 @@ export async function updateSettings(req, res) {
           seniorRate: seniorRate ? parseFloat(seniorRate) : undefined,
           pmRate: pmRate ? parseFloat(pmRate) : undefined,
           designRate: designRate ? parseFloat(designRate) : undefined,
-          targetMarginMin: targetMarginMin ? parseFloat(targetMarginMin) : undefined,
-          targetMarginMax: targetMarginMax ? parseFloat(targetMarginMax) : undefined,
+          targetMarginMin: targetMarginMin
+            ? parseFloat(targetMarginMin)
+            : undefined,
+          targetMarginMax: targetMarginMax
+            ? parseFloat(targetMarginMax)
+            : undefined,
         },
       });
     }
