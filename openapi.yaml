@@ -31,6 +31,117 @@ components:
           format: date-time
           description: Account creation timestamp
 
+    Quote:
+      type: object
+      properties:
+        id:
+          type: string
+        customerName:
+          type: string
+        projectName:
+          type: string
+        totalAmount:
+          type: number
+        status:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              description:
+                type: string
+              amount:
+                type: number
+
+    QuoteInput:
+      type: object
+      properties:
+        customerName:
+          type: string
+        projectName:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        industry:
+          type: string
+        description:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+
+    CustomerInput:
+      type: object
+      properties:
+        name:
+          type: string
+        industry:
+          type: string
+        description:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+
+    Settings:
+      type: object
+      properties:
+        id:
+          type: string
+        companyName:
+          type: string
+        taxId:
+          type: string
+        contactEmail:
+          type: string
+        juniorRate:
+          type: number
+        seniorRate:
+          type: number
+        pmRate:
+          type: number
+        designRate:
+          type: number
+        targetMarginMin:
+          type: number
+        targetMarginMax:
+          type: number
+
+    SettingsInput:
+      type: object
+      properties:
+        companyName:
+          type: string
+        taxId:
+          type: string
+        contactEmail:
+          type: string
+        juniorRate:
+          type: number
+        seniorRate:
+          type: number
+        pmRate:
+          type: number
+        designRate:
+          type: number
+        targetMarginMin:
+          type: number
+        targetMarginMax:
+          type: number
+
     ErrorResponse:
       type: object
       properties:
@@ -148,3 +259,219 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /quotes:
+    get:
+      summary: List quotes
+      tags: [Quotes]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of quotes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Quote"
+    post:
+      summary: Create quote
+      tags: [Quotes]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteInput"
+      responses:
+        "201":
+          description: Quote created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+
+  /quotes/{id}:
+    get:
+      summary: Get quote by ID
+      tags: [Quotes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quote details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+    put:
+      summary: Update quote
+      tags: [Quotes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteInput"
+      responses:
+        "200":
+          description: Quote updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+    delete:
+      summary: Delete quote
+      tags: [Quotes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quote deleted
+
+  /customers:
+    get:
+      summary: List customers
+      tags: [Customers]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+    post:
+      summary: Create customer
+      tags: [Customers]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerInput"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/{id}:
+    get:
+      summary: Get customer by ID
+      tags: [Customers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    put:
+      summary: Update customer
+      tags: [Customers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerInput"
+      responses:
+        "200":
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    delete:
+      summary: Delete customer
+      tags: [Customers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Customer deleted
+
+  /settings:
+    get:
+      summary: Get system settings
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: System settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    put:
+      summary: Update system settings
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsInput"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"

@@ -4,6 +4,8 @@ import {
   createQuote,
   getQuotes,
   getQuoteById,
+  updateQuote,
+  deleteQuote,
 } from "../controllers/quoteController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -15,5 +17,7 @@ router.use(authMiddleware);
 router.post("/", createQuote);
 router.get("/", getQuotes);
 router.get("/:id", getQuoteById);
+router.put("/:id", updateQuote);
+router.delete("/:id", deleteQuote);
 
 export default router;

@@ -39,13 +39,39 @@ export async function getCustomers(req, res) {
     const customers = await prisma.customer.findMany({
       orderBy: { createdAt: "desc" },
       include: {
+        quotes: {
+          select: {
+            totalAmount: true,
+            status: true,
+          },
+        },
         _count: {
           select: { quotes: true },
         },
       },
     });
 
-    return res.json(customers);
+    // Calculate stats
+    const customersWithStats = customers.map((customer) => {
+      const totalAmount = customer.quotes.reduce(
+        (sum, q) => sum + (q.totalAmount || 0),
+        0
+      );
+
+      // Calculate win rate or other stats if needed
+      // For now, just total amount
+
+      return {
+        ...customer,
+        totalAmount,
+        // Remove quotes array to keep response light if desired,
+        // but keeping it is fine for small datasets.
+        // Let's remove it to match the previous structure but with added fields.
+        quotes: undefined,
+      };
+    });
+
+    return res.json(customersWithStats);
   } catch (error) {
     console.error("Get customers error:", error);
     return res.status(500).json({

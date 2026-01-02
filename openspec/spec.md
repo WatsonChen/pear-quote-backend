@@ -16,4 +16,23 @@ Authentication is handled via Email OTP.
 
 ## Quote Management
 
-Please refer to the Swagger documentation for the most up-to-date Quote endpoints.
+- **GET /api/quotes**: List all quotes for the current user.
+- **POST /api/quotes**: Create a new quote.
+- **GET /api/quotes/:id**: Get a specific quote.
+- **PUT /api/quotes/:id**: Update a specific quote.
+- **DELETE /api/quotes/:id**: Delete a specific quote.
+
+## Customer Management
+
+- **GET /api/customers**: List all customers.
+- **POST /api/customers**: Create a new customer.
+- **GET /api/customers/:id**: Get a specific customer.
+- **PUT /api/customers/:id**: Update a specific customer.
+- **DELETE /api/customers/:id**: Delete a specific customer.
+
+## Settings Management
+
+- **GET /api/settings**: Get system settings.
+- **PUT /api/settings**: Update system settings.
+
+Please refer to the Swagger documentation (`openapi.yaml`) for the detailed schema and parameters.
