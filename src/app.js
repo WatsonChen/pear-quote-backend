@@ -4,6 +4,8 @@ import cors from "cors";
 import quoteRoutes from "./routes/quoteRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
+import customerRoutes from "./routes/customerRoutes.js";
+import settingsRoutes from "./routes/settingsRoutes.js";
 import baseRoutes from "./routes/baseRoutes.js";
 
 const app = express();
@@ -29,6 +31,8 @@ app.use(express.json());
 app.use("/", baseRoutes);
 app.use("/api", authRoutes);
 app.use("/api/quotes", quoteRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/api/settings", settingsRoutes);
 app.use("/api/ai", aiRoutes);
 
 // Swagger Documentation

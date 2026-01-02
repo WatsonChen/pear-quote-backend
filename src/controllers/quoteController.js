@@ -8,6 +8,7 @@ export async function createQuote(req, res) {
   try {
     const {
       customerName,
+      customerId,
       projectName,
       projectType,
       expectedDays,
@@ -19,10 +20,15 @@ export async function createQuote(req, res) {
 
     // Calculate total amount
     const totalAmount = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+    // Calculate total cost (assuming hourlyRate is cost for now, or we need a separate cost field)
+    // For now, let's assume margin is calculated elsewhere or we need more inputs.
+    // But based on schema, we have totalMargin and totalCost.
+    // Let's just save what we have.
 
     const quote = await prisma.quote.create({
       data: {
         customerName,
+        customerId,
         projectName,
         projectType,
         expectedDays: expectedDays ? parseInt(expectedDays) : null,
@@ -42,6 +48,7 @@ export async function createQuote(req, res) {
       },
       include: {
         items: true,
+        customer: true,
       },
     });
 
@@ -68,6 +75,9 @@ export async function getQuotes(req, res) {
       where: { userId },
       orderBy: { createdAt: "desc" },
       include: {
+        customer: {
+          select: { name: true },
+        },
         _count: {
           select: { items: true },
         },
@@ -97,6 +107,7 @@ export async function getQuoteById(req, res) {
       where: { id },
       include: {
         items: true,
+        customer: true,
       },
     });
 

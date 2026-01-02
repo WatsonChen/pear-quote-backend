@@ -16,13 +16,22 @@ datasource db {
 
 model Quote {
   id           String      @id @default(uuid())
-  customerName String
+  
+  // Customer Relation
+  customerId   String?
+  customer     Customer?   @relation(fields: [customerId], references: [id])
+  customerName String      // Keep for display/snapshot purposes
+
   projectName  String
   projectType  String
   expectedDays Int?
   description  String?
   status       String      @default("DRAFT")
+  
+  // Financials
   totalAmount  Float?
+  totalMargin  Float?
+  totalCost    Float?
   
   userId       String
   user         User        @relation(fields: [userId], references: [id])
@@ -31,6 +40,21 @@ model Quote {
 
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+}
+
+model Customer {
+  id          String   @id @default(uuid())
+  name        String
+  industry    String?
+  description String?
+  aiSummary   String?
+  email       String?
+  phone       String?
+  
+  quotes      Quote[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model QuoteItem {
@@ -46,6 +70,25 @@ model QuoteItem {
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model SystemSettings {
+  id              String @id @default(uuid())
+  companyName     String?
+  taxId           String?
+  contactEmail    String?
+  
+  // Rates
+  juniorRate      Float?
+  seniorRate      Float?
+  pmRate          Float?
+  designRate      Float?
+  
+  // Margin
+  targetMarginMin Float?
+  targetMarginMax Float?
+  
+  updatedAt       DateTime @updatedAt
 }
 
 model User {
