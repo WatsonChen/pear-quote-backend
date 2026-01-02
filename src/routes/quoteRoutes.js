@@ -1,26 +1,19 @@
 // src/routes/quoteRoutes.js
 import { Router } from "express";
-import prisma from "../lib/prisma.js";
+import {
+  createQuote,
+  getQuotes,
+  getQuoteById,
+} from "../controllers/quoteController.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
-router.post("/", async (req, res) => {
-  try {
-    const { title, content } = req.body;
+// All routes require authentication
+router.use(authMiddleware);
 
-    if (!title) {
-      return res.status(400).json({ error: "title is required" });
-    }
-
-    const quote = await prisma.quote.create({
-      data: { title, content },
-    });
-
-    res.json(quote);
-  } catch (err) {
-    console.error("Error creating quote:", err);
-    res.status(500).json({ error: "Failed to create quote" });
-  }
-});
+router.post("/", createQuote);
+router.get("/", getQuotes);
+router.get("/:id", getQuoteById);
 
 export default router;

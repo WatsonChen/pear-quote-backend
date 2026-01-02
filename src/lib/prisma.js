@@ -1,24 +1,14 @@
-import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-
-dotenv.config();
-
-/**
- * Prisma + Supabase (pgbouncer) + Vercel
- * 官方推薦寫法
- */
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
-
-const adapter = new PrismaPg(pool);
+import { PrismaPg } from "@prisma/adapter-pg";
 
 const globalForPrisma = globalThis;
 
-const prisma =
+const connectionString = process.env.DATABASE_URL;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+
+export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     adapter,

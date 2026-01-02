@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import quoteRoutes from "./routes/quoteRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 import baseRoutes from "./routes/baseRoutes.js";
 
 const app = express();
@@ -28,6 +29,7 @@ app.use(express.json());
 app.use("/", baseRoutes);
 app.use("/api", authRoutes);
 app.use("/api/quotes", quoteRoutes);
+app.use("/api/ai", aiRoutes);
 
 // Swagger Documentation
 import swaggerUi from "swagger-ui-express";

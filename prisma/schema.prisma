@@ -15,10 +15,37 @@ datasource db {
 }
 
 model Quote {
-  id        String   @id @default(uuid())
-  title     String
-  content   String?
-  createdAt DateTime @default(now())
+  id           String      @id @default(uuid())
+  customerName String
+  projectName  String
+  projectType  String
+  expectedDays Int?
+  description  String?
+  status       String      @default("DRAFT")
+  totalAmount  Float?
+  
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  
+  items        QuoteItem[]
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model QuoteItem {
+  id             String   @id @default(uuid())
+  quoteId        String
+  quote          Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  
+  description    String
+  estimatedHours Float
+  suggestedRole  String
+  hourlyRate     Float
+  amount         Float
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model User {
@@ -29,5 +56,6 @@ model User {
   otpExpiresAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  quotes       Quote[]
 }
 
