@@ -41,42 +41,25 @@ export async function sendLoginCode(email) {
 }
 
 /**
- * Verify the login code and return a token
+ * Verify email and password
  * @param {string} email
- * @param {string} code
+ * @param {string} password
  * @returns {Promise<{token: string, user: {id: string, email: string}}>}
  */
-export async function verifyLoginCode(email, code) {
+export async function verifyPassword(email, password) {
   const user = await prisma.user.findUnique({
     where: { email },
   });
 
-  if (!user) {
-    throw new Error("Invalid email or code");
+  if (!user || !user.passwordHash) {
+    throw new Error("Invalid email or password");
   }
 
-  if (!user.otpCode || !user.otpExpiresAt) {
-    throw new Error("Invalid email or code");
-  }
+  const isValid = await bcrypt.compare(password, user.passwordHash);
 
-  // Check if code matches
-  if (user.otpCode !== code) {
-    throw new Error("Invalid email or code");
+  if (!isValid) {
+    throw new Error("Invalid email or password");
   }
-
-  // Check if expired
-  if (new Date() > user.otpExpiresAt) {
-    throw new Error("Code has expired");
-  }
-
-  // Clear OTP after successful use
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      otpCode: null,
-      otpExpiresAt: null,
-    },
-  });
 
   // Generate Token
   const token = signToken({
@@ -91,6 +74,19 @@ export async function verifyLoginCode(email, code) {
       email: user.email,
     },
   };
+}
+
+/**
+ * Temp: Create user for seeding
+ */
+export async function createUser(email, password) {
+  const passwordHash = await bcrypt.hash(password, 10);
+  return prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+    },
+  });
 }
 
 /**

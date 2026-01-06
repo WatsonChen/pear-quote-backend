@@ -6,6 +6,7 @@ import authRoutes from "./routes/authRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import baseRoutes from "./routes/baseRoutes.js";
 
 const app = express();
@@ -33,6 +34,7 @@ app.use("/api", authRoutes);
 app.use("/api/quotes", quoteRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/ai", aiRoutes);
 
 // Swagger Documentation

@@ -1,7 +1,7 @@
 // src/controllers/authController.js
 import {
   sendLoginCode,
-  verifyLoginCode,
+  verifyPassword,
   getUserById,
 } from "../services/authService.js";
 
@@ -36,23 +36,23 @@ export async function handleSendCode(req, res) {
 }
 
 /**
- * Handle login (verify code)
+ * Handle login (password)
  * POST /api/login
  */
 export async function handleLogin(req, res) {
   try {
-    const { email, code } = req.body;
+    const { email, password } = req.body;
 
     // Validate input
-    if (!email || !code) {
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: "Email and code are required",
+        message: "Email and password are required",
       });
     }
 
-    // Attempt login (verify code)
-    const result = await verifyLoginCode(email, code);
+    // Attempt login
+    const result = await verifyPassword(email, password);
 
     return res.json({
       success: true,
@@ -61,10 +61,7 @@ export async function handleLogin(req, res) {
     });
   } catch (error) {
     // Check for specific errors
-    if (
-      error.message === "Invalid email or code" ||
-      error.message === "Code has expired"
-    ) {
+    if (error.message === "Invalid email or password") {
       return res.status(401).json({
         success: false,
         message: error.message,
@@ -72,10 +69,10 @@ export async function handleLogin(req, res) {
     }
 
     // Server error
-    console.error("Login verification error:", error);
+    console.error("Login error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Internal server error",
+      message: "Internal server error",
     });
   }
 }

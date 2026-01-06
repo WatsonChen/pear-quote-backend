@@ -11,94 +11,94 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model Quote {
-  id           String      @id @default(uuid())
-  
+  id String @id @default(uuid())
+
   // Customer Relation
   customerId   String?
-  customer     Customer?   @relation(fields: [customerId], references: [id])
-  customerName String      // Keep for display/snapshot purposes
+  customer     Customer? @relation(fields: [customerId], references: [id])
+  customerName String // Keep for display/snapshot purposes
 
   projectName  String
   projectType  String
   expectedDays Int?
   description  String?
-  status       String      @default("DRAFT")
-  
-  // Financials
-  totalAmount  Float?
-  totalMargin  Float?
-  totalCost    Float?
-  
-  userId       String
-  user         User        @relation(fields: [userId], references: [id])
-  
-  items        QuoteItem[]
+  status       String  @default("DRAFT")
 
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  // Financials
+  totalAmount Float?
+  totalMargin Float?
+  totalCost   Float?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  items QuoteItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Customer {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   industry    String?
   description String?
   aiSummary   String?
   email       String?
   phone       String?
-  
-  quotes      Quote[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  quotes Quote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model QuoteItem {
-  id             String   @id @default(uuid())
-  quoteId        String
-  quote          Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  
+  id      String @id @default(uuid())
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
   description    String
   estimatedHours Float
   suggestedRole  String
   hourlyRate     Float
   amount         Float
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model SystemSettings {
-  id              String @id @default(uuid())
-  companyName     String?
-  taxId           String?
-  contactEmail    String?
-  
+  id           String  @id @default(uuid())
+  companyName  String?
+  taxId        String?
+  contactEmail String?
+
   // Rates
-  juniorRate      Float?
-  seniorRate      Float?
-  pmRate          Float?
-  designRate      Float?
-  
+  juniorRate Float?
+  seniorRate Float?
+  pmRate     Float?
+  designRate Float?
+
   // Margin
   targetMarginMin Float?
   targetMarginMax Float?
-  
-  updatedAt       DateTime @updatedAt
+
+  updatedAt DateTime @updatedAt
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String    @id @default(uuid())
+  email        String    @unique
   passwordHash String?
   otpCode      String?
   otpExpiresAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   quotes       Quote[]
 }
-
