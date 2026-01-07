@@ -46,6 +46,7 @@ export async function updateSettings(req, res) {
       designRate,
       targetMarginMin,
       targetMarginMax,
+      companySealUrl, // Add
     } = req.body;
 
     // Find the existing record to update
@@ -69,6 +70,7 @@ export async function updateSettings(req, res) {
           targetMarginMax: targetMarginMax
             ? parseFloat(targetMarginMax)
             : undefined,
+          companySealUrl, // Add
         },
       });
     } else {
@@ -87,6 +89,7 @@ export async function updateSettings(req, res) {
           targetMarginMax: targetMarginMax
             ? parseFloat(targetMarginMax)
             : undefined,
+          companySealUrl, // Add
         },
       });
     }

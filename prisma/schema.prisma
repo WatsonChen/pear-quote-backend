@@ -33,6 +33,10 @@ model Quote {
   totalMargin Float?
   totalCost   Float?
 
+  // Terms
+  paymentTerms String?
+  validityDays Int?     @default(30)
+
   userId String
   user   User   @relation(fields: [userId], references: [id])
 
@@ -87,6 +91,10 @@ model SystemSettings {
   // Margin
   targetMarginMin Float?
   targetMarginMax Float?
+
+  // Stamps
+  companySealUrl             String?
+  companyRepresentativeSealUrl String?
 
   updatedAt DateTime @updatedAt
 }

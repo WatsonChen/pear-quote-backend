@@ -14,6 +14,8 @@ export async function createQuote(req, res) {
       expectedDays,
       description,
       items,
+      paymentTerms, // Add
+      validityDays, // Add
     } = req.body;
 
     const userId = req.user.userId; // From authMiddleware
@@ -38,6 +40,8 @@ export async function createQuote(req, res) {
         description,
         status: "DRAFT",
         totalAmount,
+        paymentTerms, // Add
+        validityDays: validityDays ? parseInt(validityDays) : 30, // Add with default
         userId,
         items: {
           create: items.map((item) => ({
@@ -155,6 +159,8 @@ export async function updateQuote(req, res) {
       description,
       status,
       items,
+      paymentTerms, // Add
+      validityDays, // Add
     } = req.body;
 
     const userId = req.user.userId;
@@ -187,6 +193,8 @@ export async function updateQuote(req, res) {
           description,
           status,
           totalAmount,
+          paymentTerms, // Add
+          validityDays: validityDays ? parseInt(validityDays) : undefined, // Add
         },
       });
 
