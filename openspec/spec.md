@@ -8,11 +8,18 @@ The Pear Backend API provides services for User Authentication (OTP-based) and Q
 
 ## Authentication
 
-Authentication is handled via Email OTP.
+Authentication is handled via Email OTP or Social Login.
 
 - **POST /api/sentotp**: Request a verification code.
 - **POST /api/login**: Login with email and verification code.
+- **POST /api/social-login**: Login with email (used by OAuth providers and Request Channel) to exchange for backend JWT.
 - **GET /api/me**: Get current user info (Bear Token required).
+
+## Analytics Management
+
+- **GET /api/analytics/metrics**: Get key performance metrics (Revenue, Projects, Active Clients, Win Rate).
+- **GET /api/analytics/projects**: Get project status distribution.
+- **POST /api/analytics/insight**: Get AI-generated business insights.
 
 ## Quote Management
 

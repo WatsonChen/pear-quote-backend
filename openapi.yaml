@@ -239,6 +239,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /social-login:
+    post:
+      summary: Login with Social Account (Google, GitHub, etc.)
+      description: Get backend JWT token using verified email from social provider
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: "#/components/schemas/User"
+
   /me:
     get:
       summary: Get current user profile
@@ -562,10 +598,6 @@ paths:
       responses:
         "200":
           description: User updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
     delete:
       summary: Delete user
       tags: [Users]
@@ -580,6 +612,77 @@ paths:
       responses:
         "200":
           description: User deleted
+
+  /analytics/metrics:
+    get:
+      summary: Get analytics metrics
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Analytics metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalRevenue:
+                    type: number
+                  totalProjects:
+                    type: number
+                  activeClients:
+                    type: number
+                  winRate:
+                    type: number
+
+  /analytics/projects:
+    get:
+      summary: Get analytics projects
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Analytics projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    value:
+                      type: number
+                    status:
+                      type: string
+
+  /analytics/insight:
+    post:
+      summary: Get AI analytics insight
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt:
+                  type: string
+      responses:
+        "200":
+          description: AI Insight
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  insight:
+                    type: string
 
   /ai/analyze:
     post:

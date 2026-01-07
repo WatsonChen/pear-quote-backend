@@ -108,3 +108,34 @@ export async function getUserById(userId) {
 
   return user;
 }
+
+/**
+ * Handle Social Login (Find or Create User)
+ * @param {string} email
+ * @returns {Promise<{token: string, user: {id: string, email: string}}>}
+ */
+export async function socialLogin(email) {
+  // Find or Create User
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: {}, // No updates needed if exists
+    create: {
+      email,
+      // No password, no OTP
+    },
+  });
+
+  // Generate Token
+  const token = signToken({
+    userId: user.id,
+    email: user.email,
+  });
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+    },
+  };
+}

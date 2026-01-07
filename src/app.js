@@ -8,6 +8,7 @@ import customerRoutes from "./routes/customerRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import baseRoutes from "./routes/baseRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // Swagger Documentation
 import swaggerUi from "swagger-ui-express";

@@ -3,6 +3,7 @@ import {
   sendLoginCode,
   verifyPassword,
   getUserById,
+  socialLogin,
 } from "../services/authService.js";
 
 /**
@@ -70,6 +71,40 @@ export async function handleLogin(req, res) {
 
     // Server error
     console.error("Login error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+/**
+ * Handle Social Login
+ * POST /api/social-login
+ */
+export async function handleSocialLogin(req, res) {
+  console.log("[Auth] handleSocialLogin called with body:", req.body);
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      console.log("[Auth] Email missing in body");
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const result = await socialLogin(email);
+    console.log("[Auth] socialLogin success for:", email);
+
+    return res.json({
+      success: true,
+      token: result.token,
+      user: result.user,
+    });
+  } catch (error) {
+    console.error("Social login error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
