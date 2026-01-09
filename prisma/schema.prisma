@@ -87,6 +87,7 @@ model SystemSettings {
   seniorRate Float?
   pmRate     Float?
   designRate Float?
+  roleRates  Json?  // Array of { role: String, rate: Number }
 
   // Margin
   targetMarginMin Float?

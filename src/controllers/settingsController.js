@@ -46,7 +46,8 @@ export async function updateSettings(req, res) {
       designRate,
       targetMarginMin,
       targetMarginMax,
-      companySealUrl, // Add
+      companySealUrl,
+      roleRates, // Dynamic role rates
     } = req.body;
 
     // Find the existing record to update
@@ -70,7 +71,8 @@ export async function updateSettings(req, res) {
           targetMarginMax: targetMarginMax
             ? parseFloat(targetMarginMax)
             : undefined,
-          companySealUrl, // Add
+          companySealUrl,
+          roleRates: roleRates || undefined,
         },
       });
     } else {
@@ -89,7 +91,8 @@ export async function updateSettings(req, res) {
           targetMarginMax: targetMarginMax
             ? parseFloat(targetMarginMax)
             : undefined,
-          companySealUrl, // Add
+          companySealUrl,
+          roleRates: roleRates || undefined,
         },
       });
     }

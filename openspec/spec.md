@@ -43,3 +43,9 @@ Authentication is handled via Email OTP or Social Login.
 - **PUT /api/settings**: Update system settings.
 
 Please refer to the Swagger documentation (`openapi.yaml`) for the detailed schema and parameters.
+
+## Dynamic Settings Update
+
+- **Schema Change**: Added `roleRates` (JSON) to `SystemSettings` model to support dynamic role configuration.
+- **API Update**: `PUT /api/settings` now accepts `roleRates` array while maintaining backward compatibility for legacy fields during transition.
+
