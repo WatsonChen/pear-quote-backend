@@ -27,7 +27,8 @@ const corsOptions = {
 
 // Middlewares
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 // Routes
 app.use("/", baseRoutes);
@@ -42,6 +43,22 @@ app.use("/api/analytics", analyticsRoutes);
 // Swagger Documentation
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.js";
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  if (err.type === "entity.too.large") {
+    return res.status(413).json({
+      success: false,
+      message: "Payload too large. Please upload smaller images.",
+    });
+  }
+
+  console.error("Server Error:", err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
 
 // Expose OpenAPI spec as JSON at root level
 app.get("/doc.json", (req, res) => {

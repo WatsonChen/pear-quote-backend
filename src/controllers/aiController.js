@@ -4,15 +4,19 @@
  */
 export async function analyzeRequirements(req, res) {
   try {
-    const { requirements } = req.body;
+    const { requirements, images } = req.body;
 
     if (!requirements) {
       return res.status(400).json({ message: "Requirements text is required" });
     }
 
+    if (images && images.length > 0) {
+      console.log(`Received ${images.length} images for analysis.`);
+    }
+
     // TODO: Integrate with OpenAI or other LLM here
     // For now, return a mock response based on the input
-    
+
     const mockItems = [
       {
         id: "ai_1",
@@ -45,17 +49,17 @@ export async function analyzeRequirements(req, res) {
         suggestedRole: "pm",
         hourlyRate: 1200,
         amount: 12000,
-      }
+      },
     ];
 
     // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     return res.json({
-      summary: "Based on your requirements, we suggest the following breakdown:",
-      items: mockItems
+      summary:
+        "Based on your requirements, we suggest the following breakdown:",
+      items: mockItems,
     });
-
   } catch (error) {
     console.error("AI Analysis error:", error);
     return res.status(500).json({
