@@ -7,6 +7,7 @@ import prisma from "../lib/prisma.js";
 export async function createCustomer(req, res) {
   try {
     const { name, industry, description, aiSummary, email, phone } = req.body;
+    const userId = req.user.userId;
 
     const customer = await prisma.customer.create({
       data: {
@@ -16,6 +17,7 @@ export async function createCustomer(req, res) {
         aiSummary,
         email,
         phone,
+        userId,
       },
     });
 
@@ -36,7 +38,9 @@ export async function createCustomer(req, res) {
  */
 export async function getCustomers(req, res) {
   try {
+    const userId = req.user.userId;
     const customers = await prisma.customer.findMany({
+      where: { userId },
       orderBy: { createdAt: "desc" },
       include: {
         quotes: {
@@ -88,9 +92,10 @@ export async function getCustomers(req, res) {
 export async function getCustomerById(req, res) {
   try {
     const { id } = req.params;
+    const userId = req.user.userId;
 
-    const customer = await prisma.customer.findUnique({
-      where: { id },
+    const customer = await prisma.customer.findFirst({
+      where: { id, userId },
       include: {
         quotes: {
           orderBy: { createdAt: "desc" },
@@ -127,9 +132,10 @@ export async function updateCustomer(req, res) {
   try {
     const { id } = req.params;
     const { name, industry, description, aiSummary, email, phone } = req.body;
+    const userId = req.user.userId;
 
     const customer = await prisma.customer.update({
-      where: { id },
+      where: { id, userId },
       data: {
         name,
         industry,
@@ -157,9 +163,10 @@ export async function updateCustomer(req, res) {
 export async function deleteCustomer(req, res) {
   try {
     const { id } = req.params;
+    const userId = req.user.userId;
 
     await prisma.customer.delete({
-      where: { id },
+      where: { id, userId },
     });
 
     return res.json({ success: true, message: "Customer deleted" });

@@ -6,13 +6,17 @@ import prisma from "../lib/prisma.js";
  */
 export async function getSettings(req, res) {
   try {
-    // Assuming there is only one settings record
-    let settings = await prisma.systemSettings.findFirst();
+    const userId = req.user.userId;
+    // Assuming each user has their own settings record
+    let settings = await prisma.systemSettings.findUnique({
+      where: { userId },
+    });
 
     if (!settings) {
-      // Create default settings if not exists
+      // Create default settings if not exists for this user
       settings = await prisma.systemSettings.create({
         data: {
+          userId,
           companyName: "My Company",
           targetMarginMin: 20,
           targetMarginMax: 40,
@@ -36,6 +40,7 @@ export async function getSettings(req, res) {
  */
 export async function updateSettings(req, res) {
   try {
+    const userId = req.user.userId;
     const {
       companyName,
       taxId,
@@ -50,52 +55,44 @@ export async function updateSettings(req, res) {
       roleRates, // Dynamic role rates
     } = req.body;
 
-    // Find the existing record to update
-    const existingSettings = await prisma.systemSettings.findFirst();
-
-    let settings;
-    if (existingSettings) {
-      settings = await prisma.systemSettings.update({
-        where: { id: existingSettings.id },
-        data: {
-          companyName,
-          taxId,
-          contactEmail,
-          juniorRate: juniorRate ? parseFloat(juniorRate) : undefined,
-          seniorRate: seniorRate ? parseFloat(seniorRate) : undefined,
-          pmRate: pmRate ? parseFloat(pmRate) : undefined,
-          designRate: designRate ? parseFloat(designRate) : undefined,
-          targetMarginMin: targetMarginMin
-            ? parseFloat(targetMarginMin)
-            : undefined,
-          targetMarginMax: targetMarginMax
-            ? parseFloat(targetMarginMax)
-            : undefined,
-          companySealUrl,
-          roleRates: roleRates || undefined,
-        },
-      });
-    } else {
-      settings = await prisma.systemSettings.create({
-        data: {
-          companyName,
-          taxId,
-          contactEmail,
-          juniorRate: juniorRate ? parseFloat(juniorRate) : undefined,
-          seniorRate: seniorRate ? parseFloat(seniorRate) : undefined,
-          pmRate: pmRate ? parseFloat(pmRate) : undefined,
-          designRate: designRate ? parseFloat(designRate) : undefined,
-          targetMarginMin: targetMarginMin
-            ? parseFloat(targetMarginMin)
-            : undefined,
-          targetMarginMax: targetMarginMax
-            ? parseFloat(targetMarginMax)
-            : undefined,
-          companySealUrl,
-          roleRates: roleRates || undefined,
-        },
-      });
-    }
+    const settings = await prisma.systemSettings.upsert({
+      where: { userId },
+      update: {
+        companyName,
+        taxId,
+        contactEmail,
+        juniorRate: juniorRate ? parseFloat(juniorRate) : undefined,
+        seniorRate: seniorRate ? parseFloat(seniorRate) : undefined,
+        pmRate: pmRate ? parseFloat(pmRate) : undefined,
+        designRate: designRate ? parseFloat(designRate) : undefined,
+        targetMarginMin: targetMarginMin
+          ? parseFloat(targetMarginMin)
+          : undefined,
+        targetMarginMax: targetMarginMax
+          ? parseFloat(targetMarginMax)
+          : undefined,
+        companySealUrl,
+        roleRates: roleRates || undefined,
+      },
+      create: {
+        userId,
+        companyName,
+        taxId,
+        contactEmail,
+        juniorRate: juniorRate ? parseFloat(juniorRate) : undefined,
+        seniorRate: seniorRate ? parseFloat(seniorRate) : undefined,
+        pmRate: pmRate ? parseFloat(pmRate) : undefined,
+        designRate: designRate ? parseFloat(designRate) : undefined,
+        targetMarginMin: targetMarginMin
+          ? parseFloat(targetMarginMin)
+          : undefined,
+        targetMarginMax: targetMarginMax
+          ? parseFloat(targetMarginMax)
+          : undefined,
+        companySealUrl,
+        roleRates: roleRates || undefined,
+      },
+    });
 
     return res.json(settings);
   } catch (error) {

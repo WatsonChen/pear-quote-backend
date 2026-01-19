@@ -55,6 +55,9 @@ model Customer {
   email       String?
   phone       String?
 
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
   quotes Quote[]
 
   createdAt DateTime @default(now())
@@ -87,15 +90,18 @@ model SystemSettings {
   seniorRate Float?
   pmRate     Float?
   designRate Float?
-  roleRates  Json?  // Array of { role: String, rate: Number }
+  roleRates  Json? // Array of { role: String, rate: Number }
 
   // Margin
   targetMarginMin Float?
   targetMarginMax Float?
 
   // Stamps
-  companySealUrl             String?
+  companySealUrl               String?
   companyRepresentativeSealUrl String?
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
 
   updatedAt DateTime @updatedAt
 }
@@ -109,4 +115,6 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   quotes       Quote[]
+  customers    Customer[]
+  settings     SystemSettings?
 }
