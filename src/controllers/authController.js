@@ -129,9 +129,9 @@ export async function handleGetMe(req, res) {
     console.error("Get me error:", error);
 
     if (error.message === "User not found") {
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
-        message: error.message,
+        message: "User session invalid or user not found",
       });
     }
 
