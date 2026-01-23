@@ -1,4 +1,6 @@
 import prisma from "../lib/prisma.js";
+import { generateText } from "ai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
 export const getAnalyticsMetrics = async (req, res) => {
   const userId = req.user.userId;
@@ -119,11 +121,92 @@ export const getAnalyticsProjects = async (req, res) => {
   }
 };
 
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+  baseURL: "https://generativelanguage.googleapis.com/v1",
+});
+
 export const postAnalyticsInsight = async (req, res) => {
-  // Mock AI response for now as requested by "static display" context if AI is not ready
-  // But we can make it sound more dynamic
-  res.json({
-    insight:
-      "根據目前的數據，本月的成交率穩定在 75% 以上，建議針對高毛利的「官網開發」專案加強推廣。",
-  });
+  const userId = req.user.userId;
+
+  try {
+    // 1. Fetch data for the prompt
+    const [quotes, projects] = await Promise.all([
+      prisma.quote.findMany({
+        where: { userId },
+        select: {
+          totalAmount: true,
+          totalMargin: true,
+          status: true,
+          projectName: true,
+          projectType: true,
+          customerName: true,
+          createdAt: true,
+        },
+      }),
+      prisma.quote.findMany({
+        where: { userId },
+        orderBy: { totalAmount: "desc" },
+        take: 5,
+      }),
+    ]);
+
+    if (quotes.length === 0) {
+      return res.json({
+        insight: "目前尚無足夠的數據產生洞察。建議先建立一些報價單！",
+      });
+    }
+
+    // 2. Calculate key metrics for the AI
+    const totalQuoted = quotes.reduce(
+      (sum, q) => sum + (q.totalAmount || 0),
+      0
+    );
+    const totalWon = quotes
+      .filter((q) => q.status === "WON")
+      .reduce((sum, q) => sum + (q.totalAmount || 0), 0);
+    const grossProfit = quotes.reduce(
+      (sum, q) => sum + (q.totalMargin || 0),
+      0
+    );
+    const winRate = ((totalWon / totalQuoted) * 100).toFixed(1);
+    const avgMargin =
+      totalQuoted > 0 ? ((grossProfit / totalQuoted) * 100).toFixed(1) : 0;
+
+    const dataSummary = `
+數據概況：
+- 總報價金額：TWD ${totalQuoted.toLocaleString()}
+- 已成交金額：TWD ${totalWon.toLocaleString()}
+- 成交率：${winRate}%
+- 平均毛利率：${avgMargin}%
+- 熱門專案類型：${Array.from(new Set(quotes.map((q) => q.projectType))).join(
+      ", "
+    )}
+- 前五大專案：${projects
+      .map((p) => `${p.projectName} (${p.totalAmount})`)
+      .join(", ")}
+`;
+
+    // 3. Call Gemini
+    const { text } = await generateText({
+      model: google("gemini-1.5-flash"),
+      prompt: `
+你是一位專業的業務分析顧問。請根據以下用戶的報價數據，提供一段簡短、具備洞察力且具備行動建議的「AI 洞察」（約 60-100 字）。
+語氣要專業、正面且具備商業價值。
+
+${dataSummary}
+
+請直接輸出洞察文本，不需要標題或其他格式。
+`,
+    });
+
+    res.json({
+      insight: text.trim(),
+    });
+  } catch (error) {
+    console.error("Failed to generate AI insight:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to generate AI insight", error: error.message });
+  }
 };
