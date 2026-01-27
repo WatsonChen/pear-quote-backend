@@ -121,10 +121,7 @@ export const getAnalyticsProjects = async (req, res) => {
   }
 };
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-  baseURL: "https://generativelanguage.googleapis.com/v1",
-});
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
 
 export const postAnalyticsInsight = async (req, res) => {
   const userId = req.user.userId;
@@ -187,18 +184,21 @@ export const postAnalyticsInsight = async (req, res) => {
       .join(", ")}
 `;
 
-    // 3. Call Gemini
-    const { text } = await generateText({
-      model: google("gemini-1.5-flash"),
-      prompt: `
+    // 3. Call Gemini via official SDK
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
 你是一位專業的業務分析顧問。請根據以下用戶的報價數據，提供一段簡短、具備洞察力且具備行動建議的「AI 洞察」（約 60-100 字）。
 語氣要專業、正面且具備商業價值。
 
 ${dataSummary}
 
 請直接輸出洞察文本，不需要標題或其他格式。
-`,
-    });
+`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
     res.json({
       insight: text.trim(),

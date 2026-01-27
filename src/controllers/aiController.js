@@ -1,10 +1,6 @@
-import { generateText } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-  baseURL: "https://generativelanguage.googleapis.com/v1",
-});
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
 
 /**
  * Analyze requirements using AI
@@ -18,14 +14,11 @@ export async function analyzeRequirements(req, res) {
       return res.status(400).json({ message: "Requirements text is required" });
     }
 
-    // Process images if any
-    const imageParts = (images || []).map((img) => {
-      const base64Data = img.includes(",") ? img.split(",")[1] : img;
-      return {
-        type: "image",
-        image: base64Data,
-        mimeType: "image/jpeg",
-      };
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
     });
 
     const prompt = `
@@ -49,33 +42,66 @@ Requirements:
 ${requirements}
 `;
 
-    console.log("Calling Gemini AI...");
-    const { text } = await generateText({
-      model: google("gemini-1.5-flash"),
-      messages: [
-        {
-          role: "user",
-          content: [{ type: "text", text: prompt }, ...imageParts],
-        },
-      ],
+    console.log("Calling Gemini AI via official SDK with payload:", {
+      requirementsLength: requirements.length,
+      imagesCount: images?.length || 0,
     });
 
-    console.log("AI Response received.");
+    // Safety check for images
+    const safeImages = Array.isArray(images) ? images : [];
 
-    // Clean the AI output (remove markdown code blocks if any)
+    const parts = [{ text: prompt }];
+
+    safeImages.forEach((img, idx) => {
+      try {
+        const base64Data = img.includes(",") ? img.split(",")[1] : img;
+        parts.push({
+          inlineData: {
+            data: base64Data,
+            mimeType: "image/jpeg",
+          },
+        });
+      } catch (e) {
+        console.error(`Error processing image at index ${idx}:`, e);
+      }
+    });
+
+    const result = await model.generateContent(parts);
+    const response = await result.response;
+    const text = response.text();
+
+    console.log("AI Response received successfully.");
+
+    // Parse the JSON result
     const cleanedText = text.replace(/```json\n?|```/g, "").trim();
-    const result = JSON.parse(cleanedText);
+    let parsedResult;
+    try {
+      parsedResult = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error(
+        "JSON Parsing Error:",
+        parseError,
+        "Cleaned Text:",
+        cleanedText
+      );
+      throw new Error(
+        `Failed to parse AI response as JSON: ${parseError.message}`
+      );
+    }
 
     return res.json({
-      summary: result.summary,
-      items: result.items,
+      summary: parsedResult.summary,
+      items: parsedResult.items,
     });
   } catch (error) {
-    console.error("AI Analysis error:", error);
+    console.error("CRITICAL AI Analysis error:", error);
+    // Return the full error message and stack for debugging
     return res.status(500).json({
       success: false,
       message: "Failed to analyze requirements",
       error: error.message,
+      stack: error.stack,
+      apiKeyPresent: !!process.env.GOOGLE_GENERATIVE_AI_API_KEY,
     });
   }
 }
