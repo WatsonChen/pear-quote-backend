@@ -1,0 +1,244 @@
+
+> pear-backend@1.0.0 dev
+> node --watch server.js
+
+Backend listening on port 3001
+prisma:query SELECT "public"."Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'
+Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'
+Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'
+Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'
+Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'
+Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'
+epresentativeSealUrl", "public"."SystemSettings"."userId", "public"."SystemSettings"."updatedAt" FROM "public"."SystemSettings" WHERE ("public"."SystemSettings"."userId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+Calling Gemini AI via official SDK with payload: { requirementsLength: 252, imagesCount: 0 }
+CRITICAL AI Analysis error: GoogleGenerativeAIFetchError: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+Please retry in 59.685257065s. [{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count","quotaId":"GenerateContentInputTokensPerModelPerMinute-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"}}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"59s"}]
+    at handleResponseNotOk (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:432:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async makeRequest (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:401:9)
+    at async generateContent (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:865:22)
+    at async analyzeRequirements (file:///Users/watson/Desktop/side/pear-backend/src/controllers/aiController.js:72:20) {
+  status: 429,
+  statusText: 'Too Many Requests',
+  errorDetails: [
+    { '@type': 'type.googleapis.com/google.rpc.Help', links: [Array] },
+    {
+      '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+      violations: [Array]
+    },
+    {
+      '@type': 'type.googleapis.com/google.rpc.RetryInfo',
+      retryDelay: '59s'
+    }
+  ]
+}
+Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'
+Restarting 'server.js'
+Backend listening on port 3001
+Restarting 'server.js'
+Backend listening on port 3001
+Calling Gemini AI via official SDK with payload: { requirementsLength: 254, imagesCount: 0 }
+CRITICAL AI Analysis error: GoogleGenerativeAIFetchError: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-001:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash-lite
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
+Please retry in 17.150584485s. [{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count","quotaId":"GenerateContentInputTokensPerModelPerMinute-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"17s"}]
+    at handleResponseNotOk (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:432:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async makeRequest (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:401:9)
+    at async generateContent (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:865:22)
+    at async analyzeRequirements (file:///Users/watson/Desktop/side/pear-backend/src/controllers/aiController.js:113:20) {
+  status: 429,
+  statusText: 'Too Many Requests',
+  errorDetails: [
+    { '@type': 'type.googleapis.com/google.rpc.Help', links: [Array] },
+    {
+      '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+      violations: [Array]
+    },
+    {
+      '@type': 'type.googleapis.com/google.rpc.RetryInfo',
+      retryDelay: '17s'
+    }
+  ]
+}
+prisma:query SELECT "public"."SystemSettings"."id", "public"."SystemSettings"."companyName", "public"."SystemSettings"."taxId", "public"."SystemSettings"."contactEmail", "public"."SystemSettings"."juniorRate", "public"."SystemSettings"."seniorRate", "public"."SystemSettings"."pmRate", "public"."SystemSettings"."designRate", "public"."SystemSettings"."roleRates", "public"."SystemSettings"."targetMarginMin", "public"."SystemSettings"."targetMarginMax", "public"."SystemSettings"."companySealUrl", "public"."SystemSettings"."companyRepresentativeSealUrl", "public"."SystemSettings"."userId", "public"."SystemSettings"."updatedAt" FROM "public"."SystemSettings" WHERE ("public"."SystemSettings"."userId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."SystemSettings"."id", "public"."SystemSettings"."companyName", "public"."SystemSettings"."taxId", "public"."SystemSettings"."contactEmail", "public"."SystemSettings"."juniorRate", "public"."SystemSettings"."seniorRate", "public"."SystemSettings"."pmRate", "public"."SystemSettings"."designRate", "public"."SystemSettings"."roleRates", "public"."SystemSettings"."targetMarginMin", "public"."SystemSettings"."targetMarginMax", "public"."SystemSettings"."companySealUrl", "public"."SystemSettings"."companyRepresentativeSealUrl", "public"."SystemSettings"."userId", "public"."SystemSettings"."updatedAt" FROM "public"."SystemSettings" WHERE ("public"."SystemSettings"."userId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+Calling Gemini AI via official SDK with payload: { requirementsLength: 254, imagesCount: 0 }
+CRITICAL AI Analysis error: GoogleGenerativeAIFetchError: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-001:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash-lite
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
+Please retry in 59.701004241s. [{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count","quotaId":"GenerateContentInputTokensPerModelPerMinute-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"59s"}]
+    at handleResponseNotOk (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:432:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async makeRequest (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:401:9)
+    at async generateContent (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:865:22)
+    at async analyzeRequirements (file:///Users/watson/Desktop/side/pear-backend/src/controllers/aiController.js:113:20) {
+  status: 429,
+  statusText: 'Too Many Requests',
+  errorDetails: [
+    { '@type': 'type.googleapis.com/google.rpc.Help', links: [Array] },
+    {
+      '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+      violations: [Array]
+    },
+    {
+      '@type': 'type.googleapis.com/google.rpc.RetryInfo',
+      retryDelay: '59s'
+    }
+  ]
+}
+prisma:query SELECT "public"."SystemSettings"."id", "public"."SystemSettings"."companyName", "public"."SystemSettings"."taxId", "public"."SystemSettings"."contactEmail", "public"."SystemSettings"."juniorRate", "public"."SystemSettings"."seniorRate", "public"."SystemSettings"."pmRate", "public"."SystemSettings"."designRate", "public"."SystemSettings"."roleRates", "public"."SystemSettings"."targetMarginMin", "public"."SystemSettings"."targetMarginMax", "public"."SystemSettings"."companySealUrl", "public"."SystemSettings"."companyRepresentativeSealUrl", "public"."SystemSettings"."userId", "public"."SystemSettings"."updatedAt" FROM "public"."SystemSettings" WHERE ("public"."SystemSettings"."userId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+Calling Gemini AI via official SDK with payload: { requirementsLength: 254, imagesCount: 0 }
+CRITICAL AI Analysis error: GoogleGenerativeAIFetchError: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-001:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash-lite
+Please retry in 17.882795057s. [{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count","quotaId":"GenerateContentInputTokensPerModelPerMinute-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"17s"}]
+    at handleResponseNotOk (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:432:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async makeRequest (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:401:9)
+    at async generateContent (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:865:22)
+    at async analyzeRequirements (file:///Users/watson/Desktop/side/pear-backend/src/controllers/aiController.js:113:20) {
+  status: 429,
+  statusText: 'Too Many Requests',
+  errorDetails: [
+    { '@type': 'type.googleapis.com/google.rpc.Help', links: [Array] },
+    {
+      '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+      violations: [Array]
+    },
+    {
+      '@type': 'type.googleapis.com/google.rpc.RetryInfo',
+      retryDelay: '17s'
+    }
+  ]
+}
+Calling Gemini AI via official SDK with payload: { requirementsLength: 254, imagesCount: 0 }
+CRITICAL AI Analysis error: GoogleGenerativeAIFetchError: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-001:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash-lite
+Please retry in 22.920141118s. [{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}},{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count","quotaId":"GenerateContentInputTokensPerModelPerMinute-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash-lite"}}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"22s"}]
+    at handleResponseNotOk (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:432:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async makeRequest (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:401:9)
+    at async generateContent (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:865:22)
+    at async analyzeRequirements (file:///Users/watson/Desktop/side/pear-backend/src/controllers/aiController.js:113:20) {
+  status: 429,
+  statusText: 'Too Many Requests',
+  errorDetails: [
+    { '@type': 'type.googleapis.com/google.rpc.Help', links: [Array] },
+    {
+      '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+      violations: [Array]
+    },
+    {
+      '@type': 'type.googleapis.com/google.rpc.RetryInfo',
+      retryDelay: '22s'
+    }
+  ]
+}
+Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'
+Restarting 'server.js'
+Backend listening on port 3001
+Calling Gemini AI via official SDK with payload: { requirementsLength: 0, imagesCount: 1 }
+CRITICAL AI Analysis error: GoogleGenerativeAIFetchError: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent: [429 Too Many Requests] Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.
+    at handleResponseNotOk (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:432:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async makeRequest (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:401:9)
+    at async generateContent (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:865:22)
+    at async analyzeRequirements (file:///Users/watson/Desktop/side/pear-backend/src/controllers/aiController.js:122:20) {
+  status: 429,
+  statusText: 'Too Many Requests',
+  errorDetails: undefined
+}
+Calling Gemini AI via official SDK with payload: { requirementsLength: 0, imagesCount: 1 }
+CRITICAL AI Analysis error: GoogleGenerativeAIFetchError: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent: [429 Too Many Requests] Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.
+    at handleResponseNotOk (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:432:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async makeRequest (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:401:9)
+    at async generateContent (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:865:22)
+    at async analyzeRequirements (file:///Users/watson/Desktop/side/pear-backend/src/controllers/aiController.js:122:20) {
+  status: 429,
+  statusText: 'Too Many Requests',
+  errorDetails: undefined
+}
+prisma:query SELECT "public"."SystemSettings"."id", "public"."SystemSettings"."companyName", "public"."SystemSettings"."taxId", "public"."SystemSettings"."contactEmail", "public"."SystemSettings"."juniorRate", "public"."SystemSettings"."seniorRate", "public"."SystemSettings"."pmRate", "public"."SystemSettings"."designRate", "public"."SystemSettings"."roleRates", "public"."SystemSettings"."targetMarginMin", "public"."SystemSettings"."targetMarginMax", "public"."SystemSettings"."companySealUrl", "public"."SystemSettings"."companyRepresentativeSealUrl", "public"."SystemSettings"."userId", "public"."SystemSettings"."updatedAt" FROM "public"."SystemSettings" WHERE ("public"."SystemSettings"."userId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+Calling Gemini AI via official SDK with payload: { requirementsLength: 0, imagesCount: 1 }
+CRITICAL AI Analysis error: GoogleGenerativeAIFetchError: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent: [429 Too Many Requests] Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.
+    at handleResponseNotOk (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:432:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async makeRequest (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:401:9)
+    at async generateContent (file:///Users/watson/Desktop/side/pear-backend/node_modules/@google/generative-ai/dist/index.mjs:865:22)
+    at async analyzeRequirements (file:///Users/watson/Desktop/side/pear-backend/src/controllers/aiController.js:122:20) {
+  status: 429,
+  statusText: 'Too Many Requests',
+  errorDetails: undefined
+}
+Calling Gemini AI via official SDK with payload: { requirementsLength: 254, imagesCount: 0 }
+AI Response received successfully.
+prisma:query SELECT "public"."SystemSettings"."id", "public"."SystemSettings"."companyName", "public"."SystemSettings"."taxId", "public"."SystemSettings"."contactEmail", "public"."SystemSettings"."juniorRate", "public"."SystemSettings"."seniorRate", "public"."SystemSettings"."pmRate", "public"."SystemSettings"."designRate", "public"."SystemSettings"."roleRates", "public"."SystemSettings"."targetMarginMin", "public"."SystemSettings"."targetMarginMax", "public"."SystemSettings"."companySealUrl", "public"."SystemSettings"."companyRepresentativeSealUrl", "public"."SystemSettings"."userId", "public"."SystemSettings"."updatedAt" FROM "public"."SystemSettings" WHERE ("public"."SystemSettings"."userId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+Calling Gemini AI via official SDK with payload: { requirementsLength: 0, imagesCount: 1 }
+AI Response received successfully.
+prisma:query INSERT INTO "public"."Quote" ("id","customerName","projectName","projectType","expectedDays","description","status","totalAmount","paymentTerms","validityDays","userId","createdAt","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING "public"."Quote"."id"
+prisma:query INSERT INTO "public"."QuoteItem" ("id","quoteId","description","estimatedHours","suggestedRole","hourlyRate","amount","createdAt","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9), ($10,$11,$12,$13,$14,$15,$16,$17,$18), ($19,$20,$21,$22,$23,$24,$25,$26,$27), ($28,$29,$30,$31,$32,$33,$34,$35,$36), ($37,$38,$39,$40,$41,$42,$43,$44,$45), ($46,$47,$48,$49,$50,$51,$52,$53,$54), ($55,$56,$57,$58,$59,$60,$61,$62,$63), ($64,$65,$66,$67,$68,$69,$70,$71,$72), ($73,$74,$75,$76,$77,$78,$79,$80,$81)
+prisma:query SELECT "public"."Quote"."id", "public"."Quote"."customerId", "public"."Quote"."customerName", "public"."Quote"."projectName", "public"."Quote"."projectType", "public"."Quote"."expectedDays", "public"."Quote"."description", "public"."Quote"."status", "public"."Quote"."totalAmount", "public"."Quote"."totalMargin", "public"."Quote"."totalCost", "public"."Quote"."paymentTerms", "public"."Quote"."validityDays", "public"."Quote"."userId", "public"."Quote"."createdAt", "public"."Quote"."updatedAt" FROM "public"."Quote" WHERE "public"."Quote"."id" = $1 LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."QuoteItem"."id", "public"."QuoteItem"."quoteId", "public"."QuoteItem"."description", "public"."QuoteItem"."estimatedHours", "public"."QuoteItem"."suggestedRole", "public"."QuoteItem"."hourlyRate", "public"."QuoteItem"."amount", "public"."QuoteItem"."createdAt", "public"."QuoteItem"."updatedAt" FROM "public"."QuoteItem" WHERE "public"."QuoteItem"."quoteId" = $1 OFFSET $2
+prisma:query SELECT "public"."Customer"."id", "public"."Customer"."name", "public"."Customer"."industry", "public"."Customer"."description", "public"."Customer"."aiSummary", "public"."Customer"."email", "public"."Customer"."phone", "public"."Customer"."userId", "public"."Customer"."createdAt", "public"."Customer"."updatedAt" FROM "public"."Customer" WHERE "public"."Customer"."id" = $1 OFFSET $2
+prisma:query COMMIT
+getQuotes called. User: {
+  userId: '04e3a3a7-f937-4679-b38f-f5e3cfc2e5d4',
+  email: 'test@pear.com'
+}
+prisma:query SELECT "public"."Quote"."id", "public"."Quote"."customerId", "public"."Quote"."customerName", "public"."Quote"."projectName", "public"."Quote"."projectType", "public"."Quote"."expectedDays", "public"."Quote"."description", "public"."Quote"."status", "public"."Quote"."totalAmount", "public"."Quote"."totalMargin", "public"."Quote"."totalCost", "public"."Quote"."paymentTerms", "public"."Quote"."validityDays", "public"."Quote"."userId", "public"."Quote"."createdAt", "public"."Quote"."updatedAt", COALESCE("aggr_selection_0_QuoteItem"."_aggr_count_items", 0) AS "_aggr_count_items" FROM "public"."Quote" LEFT JOIN (SELECT "public"."QuoteItem"."quoteId", COUNT(*) AS "_aggr_count_items" FROM "public"."QuoteItem" WHERE 1=1 GROUP BY "public"."QuoteItem"."quoteId") AS "aggr_selection_0_QuoteItem" ON ("public"."Quote"."id" = "aggr_selection_0_QuoteItem"."quoteId") WHERE "public"."Quote"."userId" = $1 ORDER BY "public"."Quote"."createdAt" DESC OFFSET $2
+prisma:query SELECT "public"."Customer"."id", "public"."Customer"."name" FROM "public"."Customer" WHERE "public"."Customer"."id" IN ($1,$2) OFFSET $3
+getQuotes called. User: {
+  userId: '04e3a3a7-f937-4679-b38f-f5e3cfc2e5d4',
+  email: 'test@pear.com'
+}
+prisma:query SELECT "public"."Quote"."id", "public"."Quote"."customerId", "public"."Quote"."customerName", "public"."Quote"."projectName", "public"."Quote"."projectType", "public"."Quote"."expectedDays", "public"."Quote"."description", "public"."Quote"."status", "public"."Quote"."totalAmount", "public"."Quote"."totalMargin", "public"."Quote"."totalCost", "public"."Quote"."paymentTerms", "public"."Quote"."validityDays", "public"."Quote"."userId", "public"."Quote"."createdAt", "public"."Quote"."updatedAt", COALESCE("aggr_selection_0_QuoteItem"."_aggr_count_items", 0) AS "_aggr_count_items" FROM "public"."Quote" LEFT JOIN (SELECT "public"."QuoteItem"."quoteId", COUNT(*) AS "_aggr_count_items" FROM "public"."QuoteItem" WHERE 1=1 GROUP BY "public"."QuoteItem"."quoteId") AS "aggr_selection_0_QuoteItem" ON ("public"."Quote"."id" = "aggr_selection_0_QuoteItem"."quoteId") WHERE "public"."Quote"."userId" = $1 ORDER BY "public"."Quote"."createdAt" DESC OFFSET $2
+prisma:query SELECT "public"."Customer"."id", "public"."Customer"."name" FROM "public"."Customer" WHERE "public"."Customer"."id" IN ($1,$2) OFFSET $3
+prisma:query SELECT "public"."Quote"."id", "public"."Quote"."customerId", "public"."Quote"."customerName", "public"."Quote"."projectName", "public"."Quote"."projectType", "public"."Quote"."expectedDays", "public"."Quote"."description", "public"."Quote"."status", "public"."Quote"."totalAmount", "public"."Quote"."totalMargin", "public"."Quote"."totalCost", "public"."Quote"."paymentTerms", "public"."Quote"."validityDays", "public"."Quote"."userId", "public"."Quote"."createdAt", "public"."Quote"."updatedAt" FROM "public"."Quote" WHERE ("public"."Quote"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."QuoteItem"."id", "public"."QuoteItem"."quoteId", "public"."QuoteItem"."description", "public"."QuoteItem"."estimatedHours", "public"."QuoteItem"."suggestedRole", "public"."QuoteItem"."hourlyRate", "public"."QuoteItem"."amount", "public"."QuoteItem"."createdAt", "public"."QuoteItem"."updatedAt" FROM "public"."QuoteItem" WHERE "public"."QuoteItem"."quoteId" = $1 OFFSET $2
+prisma:query SELECT "public"."SystemSettings"."id", "public"."SystemSettings"."companyName", "public"."SystemSettings"."taxId", "public"."SystemSettings"."contactEmail", "public"."SystemSettings"."juniorRate", "public"."SystemSettings"."seniorRate", "public"."SystemSettings"."pmRate", "public"."SystemSettings"."designRate", "public"."SystemSettings"."roleRates", "public"."SystemSettings"."targetMarginMin", "public"."SystemSettings"."targetMarginMax", "public"."SystemSettings"."companySealUrl", "public"."SystemSettings"."companyRepresentativeSealUrl", "public"."SystemSettings"."userId", "public"."SystemSettings"."updatedAt" FROM "public"."SystemSettings" WHERE ("public"."SystemSettings"."userId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."Customer"."id", "public"."Customer"."name", "public"."Customer"."industry", "public"."Customer"."description", "public"."Customer"."aiSummary", "public"."Customer"."email", "public"."Customer"."phone", "public"."Customer"."userId", "public"."Customer"."createdAt", "public"."Customer"."updatedAt" FROM "public"."Customer" WHERE "public"."Customer"."id" = $1 OFFSET $2
+prisma:query SELECT "public"."SystemSettings"."id", "public"."SystemSettings"."companyName", "public"."SystemSettings"."taxId", "public"."SystemSettings"."contactEmail", "public"."SystemSettings"."juniorRate", "public"."SystemSettings"."seniorRate", "public"."SystemSettings"."pmRate", "public"."SystemSettings"."designRate", "public"."SystemSettings"."roleRates", "public"."SystemSettings"."targetMarginMin", "public"."SystemSettings"."targetMarginMax", "public"."SystemSettings"."companySealUrl", "public"."SystemSettings"."companyRepresentativeSealUrl", "public"."SystemSettings"."userId", "public"."SystemSettings"."updatedAt" FROM "public"."SystemSettings" WHERE ("public"."SystemSettings"."userId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."Quote"."id", "public"."Quote"."customerId", "public"."Quote"."customerName", "public"."Quote"."projectName", "public"."Quote"."projectType", "public"."Quote"."expectedDays", "public"."Quote"."description", "public"."Quote"."status", "public"."Quote"."totalAmount", "public"."Quote"."totalMargin", "public"."Quote"."totalCost", "public"."Quote"."paymentTerms", "public"."Quote"."validityDays", "public"."Quote"."userId", "public"."Quote"."createdAt", "public"."Quote"."updatedAt" FROM "public"."Quote" WHERE ("public"."Quote"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."QuoteItem"."id", "public"."QuoteItem"."quoteId", "public"."QuoteItem"."description", "public"."QuoteItem"."estimatedHours", "public"."QuoteItem"."suggestedRole", "public"."QuoteItem"."hourlyRate", "public"."QuoteItem"."amount", "public"."QuoteItem"."createdAt", "public"."QuoteItem"."updatedAt" FROM "public"."QuoteItem" WHERE "public"."QuoteItem"."quoteId" = $1 OFFSET $2
+prisma:query SELECT "public"."Customer"."id", "public"."Customer"."name", "public"."Customer"."industry", "public"."Customer"."description", "public"."Customer"."aiSummary", "public"."Customer"."email", "public"."Customer"."phone", "public"."Customer"."userId", "public"."Customer"."createdAt", "public"."Customer"."updatedAt" FROM "public"."Customer" WHERE "public"."Customer"."id" = $1 OFFSET $2
+getQuotes called. User: {
+  userId: '04e3a3a7-f937-4679-b38f-f5e3cfc2e5d4',
+  email: 'test@pear.com'
+}
+prisma:query SELECT "public"."Quote"."id", "public"."Quote"."customerId", "public"."Quote"."customerName", "public"."Quote"."projectName", "public"."Quote"."projectType", "public"."Quote"."expectedDays", "public"."Quote"."description", "public"."Quote"."status", "public"."Quote"."totalAmount", "public"."Quote"."totalMargin", "public"."Quote"."totalCost", "public"."Quote"."paymentTerms", "public"."Quote"."validityDays", "public"."Quote"."userId", "public"."Quote"."createdAt", "public"."Quote"."updatedAt", COALESCE("aggr_selection_0_QuoteItem"."_aggr_count_items", 0) AS "_aggr_count_items" FROM "public"."Quote" LEFT JOIN (SELECT "public"."QuoteItem"."quoteId", COUNT(*) AS "_aggr_count_items" FROM "public"."QuoteItem" WHERE 1=1 GROUP BY "public"."QuoteItem"."quoteId") AS "aggr_selection_0_QuoteItem" ON ("public"."Quote"."id" = "aggr_selection_0_QuoteItem"."quoteId") WHERE "public"."Quote"."userId" = $1 ORDER BY "public"."Quote"."createdAt" DESC OFFSET $2
+prisma:query SELECT "public"."Customer"."id", "public"."Customer"."name" FROM "public"."Customer" WHERE "public"."Customer"."id" IN ($1,$2) OFFSET $3
+getQuotes called. User: {
+  userId: '04e3a3a7-f937-4679-b38f-f5e3cfc2e5d4',
+  email: 'test@pear.com'
+}
+prisma:query SELECT "public"."Quote"."id", "public"."Quote"."customerId", "public"."Quote"."customerName", "public"."Quote"."projectName", "public"."Quote"."projectType", "public"."Quote"."expectedDays", "public"."Quote"."description", "public"."Quote"."status", "public"."Quote"."totalAmount", "public"."Quote"."totalMargin", "public"."Quote"."totalCost", "public"."Quote"."paymentTerms", "public"."Quote"."validityDays", "public"."Quote"."userId", "public"."Quote"."createdAt", "public"."Quote"."updatedAt", COALESCE("aggr_selection_0_QuoteItem"."_aggr_count_items", 0) AS "_aggr_count_items" FROM "public"."Quote" LEFT JOIN (SELECT "public"."QuoteItem"."quoteId", COUNT(*) AS "_aggr_count_items" FROM "public"."QuoteItem" WHERE 1=1 GROUP BY "public"."QuoteItem"."quoteId") AS "aggr_selection_0_QuoteItem" ON ("public"."Quote"."id" = "aggr_selection_0_QuoteItem"."quoteId") WHERE "public"."Quote"."userId" = $1 ORDER BY "public"."Quote"."createdAt" DESC OFFSET $2
+prisma:query SELECT "public"."Customer"."id", "public"."Customer"."name" FROM "public"."Customer" WHERE "public"."Customer"."id" IN ($1,$2) OFFSET $3
+Restarting 'server.js'
+Backend listening on port 3001
+Completed running 'server.js'

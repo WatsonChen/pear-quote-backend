@@ -1,6 +1,7 @@
 import prisma from "../lib/prisma.js";
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const getAnalyticsMetrics = async (req, res) => {
   const userId = req.user.userId;
@@ -17,14 +18,14 @@ export const getAnalyticsMetrics = async (req, res) => {
 
     const totalQuoted = quotes.reduce(
       (sum, q) => sum + (q.totalAmount || 0),
-      0
+      0,
     );
     const totalWon = quotes
       .filter((q) => q.status === "WON")
       .reduce((sum, q) => sum + (q.totalAmount || 0), 0);
     const grossProfit = quotes.reduce(
       (sum, q) => sum + (q.totalMargin || 0),
-      0
+      0,
     );
     const marginRate = totalQuoted > 0 ? (grossProfit / totalQuoted) * 100 : 0;
 
@@ -157,14 +158,14 @@ export const postAnalyticsInsight = async (req, res) => {
     // 2. Calculate key metrics for the AI
     const totalQuoted = quotes.reduce(
       (sum, q) => sum + (q.totalAmount || 0),
-      0
+      0,
     );
     const totalWon = quotes
       .filter((q) => q.status === "WON")
       .reduce((sum, q) => sum + (q.totalAmount || 0), 0);
     const grossProfit = quotes.reduce(
       (sum, q) => sum + (q.totalMargin || 0),
-      0
+      0,
     );
     const winRate = ((totalWon / totalQuoted) * 100).toFixed(1);
     const avgMargin =
@@ -177,7 +178,7 @@ export const postAnalyticsInsight = async (req, res) => {
 - 成交率：${winRate}%
 - 平均毛利率：${avgMargin}%
 - 熱門專案類型：${Array.from(new Set(quotes.map((q) => q.projectType))).join(
-      ", "
+      ", ",
     )}
 - 前五大專案：${projects
       .map((p) => `${p.projectName} (${p.totalAmount})`)
@@ -185,7 +186,7 @@ export const postAnalyticsInsight = async (req, res) => {
 `;
 
     // 3. Call Gemini via official SDK
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `
 你是一位專業的業務分析顧問。請根據以下用戶的報價數據，提供一段簡短、具備洞察力且具備行動建議的「AI 洞察」（約 60-100 字）。

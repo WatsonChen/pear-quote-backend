@@ -10,12 +10,15 @@ export async function analyzeRequirements(req, res) {
   try {
     const { requirements, images } = req.body;
 
-    if (!requirements) {
-      return res.status(400).json({ message: "Requirements text is required" });
+    // Allow empty requirements if images are provided
+    if (!requirements && (!images || images.length === 0)) {
+      return res
+        .status(400)
+        .json({ message: "Requirements text or images are required" });
     }
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash", // Updated to confirmed available model
       generationConfig: {
         responseMimeType: "application/json",
       },
@@ -23,13 +26,22 @@ export async function analyzeRequirements(req, res) {
 
     const prompt = `
 Please analyze these software requirements and break them down into actionable tasks. 
-Return the result EXCLUSIVELY as a valid JSON object with the following structure:
+Return the result EXCLUSIVELY as a valid JSON object.
+
+Important Instructions:
+1. **Language**: All text content (description, etc.) MUST be in **Traditional Chinese (Taiwan)** (繁體中文).
+2. **Financials**: 
+   - You MUST estimate a reasonable "hourlyRate" (e.g., between 800 and 3000 TWD based on role).
+   - "amount" MUST be calculated as "estimatedHours" * "hourlyRate".
+   - Do NOT return 0 for rates or amounts.
+
+JSON Structure:
 {
-  "summary": "string",
+  "summary": "string (Short summary in Traditional Chinese)",
   "items": [
     {
       "id": "string (e.g., ai_1)",
-      "description": "string",
+      "description": "string (Task description in Traditional Chinese)",
       "estimatedHours": number,
       "suggestedRole": "design" | "frontend" | "backend" | "pm" | "qa" | "other",
       "hourlyRate": number,
@@ -82,10 +94,10 @@ ${requirements}
         "JSON Parsing Error:",
         parseError,
         "Cleaned Text:",
-        cleanedText
+        cleanedText,
       );
       throw new Error(
-        `Failed to parse AI response as JSON: ${parseError.message}`
+        `Failed to parse AI response as JSON: ${parseError.message}`,
       );
     }
 
