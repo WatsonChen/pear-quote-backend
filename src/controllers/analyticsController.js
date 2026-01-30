@@ -7,55 +7,161 @@ export const getAnalyticsMetrics = async (req, res) => {
   const userId = req.user.userId;
 
   try {
-    const quotes = await prisma.quote.findMany({
-      where: { userId },
-      select: {
-        totalAmount: true,
-        totalMargin: true,
-        status: true,
-      },
-    });
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
 
-    const totalQuoted = quotes.reduce(
-      (sum, q) => sum + (q.totalAmount || 0),
-      0,
+    // Current month start and end
+    const currentMonthStart = new Date(currentYear, currentMonth, 1);
+    const nextMonthStart = new Date(currentYear, currentMonth + 1, 1);
+
+    // Previous month start and end
+    const prevMonthStart = new Date(currentYear, currentMonth - 1, 1);
+    const prevMonthEnd = new Date(currentYear, currentMonth, 1);
+
+    // Trend start (6 months ago)
+    const trendStart = new Date(currentYear, currentMonth - 5, 1);
+
+    // Fetch quotes for current, previous month, and trend range
+    const [currentMonthQuotes, prevMonthQuotes, trendQuotes] =
+      await Promise.all([
+        prisma.quote.findMany({
+          where: {
+            userId,
+            createdAt: {
+              gte: currentMonthStart,
+              lt: nextMonthStart,
+            },
+          },
+          select: { totalAmount: true, totalMargin: true, status: true },
+        }),
+        prisma.quote.findMany({
+          where: {
+            userId,
+            createdAt: {
+              gte: prevMonthStart,
+              lt: prevMonthEnd,
+            },
+          },
+          select: { totalAmount: true, totalMargin: true, status: true },
+        }),
+        prisma.quote.findMany({
+          where: {
+            userId,
+            createdAt: {
+              gte: trendStart,
+            },
+          },
+          select: { totalAmount: true, status: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
+        }),
+      ]);
+
+    // Helper to calculate metrics
+    const calculateMetrics = (quotes) => {
+      const totalQuoted = quotes.reduce(
+        (sum, q) => sum + (q.totalAmount || 0),
+        0,
+      );
+      const totalWon = quotes
+        .filter((q) => q.status === "WON")
+        .reduce((sum, q) => sum + (q.totalAmount || 0), 0);
+      const grossProfit = quotes.reduce(
+        (sum, q) => sum + (q.totalMargin || 0),
+        0,
+      );
+      const marginRate =
+        totalQuoted > 0 ? (grossProfit / totalQuoted) * 100 : 0;
+      return { totalQuoted, totalWon, grossProfit, marginRate };
+    };
+
+    const currentMetrics = calculateMetrics(currentMonthQuotes);
+    const prevMetrics = calculateMetrics(prevMonthQuotes);
+
+    // Helper to calculate trend and change
+    const calculateTrend = (current, previous) => {
+      if (previous === 0) {
+        return {
+          change: current === 0 ? 0 : 100,
+          trend: current > 0 ? "up" : "neutral",
+        };
+      }
+      const change = ((current - previous) / previous) * 100;
+      return {
+        change: Math.abs(Math.round(change)),
+        trend: change > 0 ? "up" : change < 0 ? "down" : "neutral",
+      };
+    };
+
+    const totalQuotedTrend = calculateTrend(
+      currentMetrics.totalQuoted,
+      prevMetrics.totalQuoted,
     );
-    const totalWon = quotes
-      .filter((q) => q.status === "WON")
-      .reduce((sum, q) => sum + (q.totalAmount || 0), 0);
-    const grossProfit = quotes.reduce(
-      (sum, q) => sum + (q.totalMargin || 0),
-      0,
+    const totalWonTrend = calculateTrend(
+      currentMetrics.totalWon,
+      prevMetrics.totalWon,
     );
-    const marginRate = totalQuoted > 0 ? (grossProfit / totalQuoted) * 100 : 0;
+    const grossProfitTrend = calculateTrend(
+      currentMetrics.grossProfit,
+      prevMetrics.grossProfit,
+    );
+    const marginRateTrend = calculateTrend(
+      currentMetrics.marginRate,
+      prevMetrics.marginRate,
+    );
+
+    // Calculate 6-month trend data
+    const trendData = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(currentYear, currentMonth - i, 1);
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const label = `${year}-${String(month + 1).padStart(2, "0")}`;
+
+      const monthlyQuotes = trendQuotes.filter((q) => {
+        const qDate = new Date(q.createdAt);
+        return qDate.getFullYear() === year && qDate.getMonth() === month;
+      });
+
+      const quoted = monthlyQuotes.reduce(
+        (sum, q) => sum + (q.totalAmount || 0),
+        0,
+      );
+      const won = monthlyQuotes
+        .filter((q) => q.status === "WON")
+        .reduce((sum, q) => sum + (q.totalAmount || 0), 0);
+
+      trendData.push({ name: label, quoted, won });
+    }
 
     res.json({
       metrics: [
         {
           title: "總報價金額",
-          value: totalQuoted,
-          trend: "up",
-          change: 12,
+          value: currentMetrics.totalQuoted,
+          trend: totalQuotedTrend.trend,
+          change: totalQuotedTrend.change,
         },
         {
           title: "成交金額",
-          value: totalWon,
-          trend: "up",
-          change: 8,
+          value: currentMetrics.totalWon,
+          trend: totalWonTrend.trend,
+          change: totalWonTrend.change,
         },
         {
           title: "毛利總額",
-          value: grossProfit,
-          trend: "up",
-          change: 5,
+          value: currentMetrics.grossProfit,
+          trend: grossProfitTrend.trend,
+          change: grossProfitTrend.change,
         },
         {
           title: "平均毛利率",
-          value: marginRate.toFixed(1),
-          trend: "up",
-          change: 2,
+          value: currentMetrics.marginRate.toFixed(1),
+          trend: marginRateTrend.trend,
+          change: marginRateTrend.change,
         },
       ],
+      trendData,
     });
   } catch (error) {
     console.error("Failed to get analytics metrics:", error);
