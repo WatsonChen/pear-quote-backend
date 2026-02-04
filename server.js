@@ -1,4 +1,4 @@
-// server.js
+// server.js - touched for restart
 import "dotenv/config"; // ← 新增這行，讓 process.env 載入 .env
 
 import app from "./src/app.js";
