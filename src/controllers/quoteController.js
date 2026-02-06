@@ -16,6 +16,7 @@ export async function createQuote(req, res) {
       items,
       paymentTerms, // Add
       validityDays, // Add
+      wonAmount, // Add - actual deal amount
     } = req.body;
 
     const userId = req.user.userId; // From authMiddleware
@@ -23,7 +24,7 @@ export async function createQuote(req, res) {
     // Calculate total amount
     const totalAmount = items.reduce(
       (sum, item) => sum + (item.amount || 0),
-      0
+      0,
     );
     // Calculate total cost (assuming hourlyRate is cost for now, or we need a separate cost field)
     // For now, let's assume margin is calculated elsewhere or we need more inputs.
@@ -40,6 +41,7 @@ export async function createQuote(req, res) {
         description,
         status: "DRAFT",
         totalAmount,
+        wonAmount: wonAmount ? parseFloat(wonAmount) : null, // Add
         paymentTerms, // Add
         validityDays: validityDays ? parseInt(validityDays) : 30, // Add with default
         userId,
@@ -161,6 +163,7 @@ export async function updateQuote(req, res) {
       items,
       paymentTerms, // Add
       validityDays, // Add
+      wonAmount, // Add - actual deal amount
     } = req.body;
 
     const userId = req.user.userId;
@@ -193,27 +196,35 @@ export async function updateQuote(req, res) {
           description,
           status,
           totalAmount,
+          wonAmount:
+            wonAmount !== undefined
+              ? wonAmount
+                ? parseFloat(wonAmount)
+                : null
+              : undefined, // Add
           paymentTerms, // Add
           validityDays: validityDays ? parseInt(validityDays) : undefined, // Add
         },
       });
 
       // 2. If items provided, replace them
-      if (items) {
+      if (items && Array.isArray(items) && items.length > 0) {
         // Delete existing items
         await prisma.quoteItem.deleteMany({
           where: { quoteId: id },
         });
 
-        // Create new items
+        // Create new items - only extract necessary fields
         await prisma.quoteItem.createMany({
           data: items.map((item) => ({
             quoteId: id,
-            description: item.description,
-            estimatedHours: parseFloat(item.estimatedHours || 0),
-            suggestedRole: item.suggestedRole,
-            hourlyRate: parseFloat(item.hourlyRate || 0),
-            amount: parseFloat(item.amount || 0),
+            description: item.description || "",
+            estimatedHours: item.estimatedHours
+              ? parseFloat(item.estimatedHours)
+              : 0,
+            suggestedRole: item.suggestedRole || "",
+            hourlyRate: item.hourlyRate ? parseFloat(item.hourlyRate) : 0,
+            amount: item.amount ? parseFloat(item.amount) : 0,
           })),
         });
       }

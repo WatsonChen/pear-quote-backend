@@ -30,6 +30,7 @@ model Quote {
 
   // Financials
   totalAmount Float?
+  wonAmount   Float? // Actual deal amount when status is WON
   totalMargin Float?
   totalCost   Float?
 
