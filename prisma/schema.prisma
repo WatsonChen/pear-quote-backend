@@ -55,6 +55,8 @@ model Customer {
   aiSummary   String?
   email       String?
   phone       String?
+  type        String  @default("company") // "company" or "personal"
+  taxId       String?
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
@@ -71,9 +73,11 @@ model QuoteItem {
   quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   description    String
-  estimatedHours Float
-  suggestedRole  String
-  hourlyRate     Float
+  type           String  @default("service") // "service" or "material"
+  estimatedHours Float?  // Optional for material
+  suggestedRole  String? // Optional for material
+  unit           String? // For material e.g. "kg", "pc"
+  hourlyRate     Float   // Or unit price for material
   amount         Float
 
   createdAt DateTime @default(now())
@@ -106,6 +110,7 @@ model SystemSettings {
 
   // Materials (New)
   materials    Json? // Array of { id: String, name: String, unit: String, price: Number }
+
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id])
