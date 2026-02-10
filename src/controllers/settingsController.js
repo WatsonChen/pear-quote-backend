@@ -54,6 +54,7 @@ export async function updateSettings(req, res) {
       companySealUrl,
       roleRates, // Dynamic role rates
       projectTypes, // Dynamic project types
+      materials, // Dynamic materials
     } = req.body;
 
     const settings = await prisma.systemSettings.upsert({
@@ -75,6 +76,7 @@ export async function updateSettings(req, res) {
         companySealUrl,
         roleRates: roleRates || undefined,
         projectTypes: projectTypes || undefined,
+        materials: materials || undefined,
       },
       create: {
         userId,
@@ -94,6 +96,7 @@ export async function updateSettings(req, res) {
         companySealUrl,
         roleRates: roleRates || undefined,
         projectTypes: projectTypes || undefined,
+        materials: materials || undefined,
       },
     });
 

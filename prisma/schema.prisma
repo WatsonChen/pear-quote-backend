@@ -104,6 +104,9 @@ model SystemSettings {
   // Project Types (Customizable)
   projectTypes Json? // Array of { value: String, label: String }
 
+  // Materials (New)
+  materials    Json? // Array of { id: String, name: String, unit: String, price: Number }
+
   userId String @unique
   user   User   @relation(fields: [userId], references: [id])
 
