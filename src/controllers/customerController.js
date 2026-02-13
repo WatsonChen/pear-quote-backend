@@ -6,7 +6,16 @@ import prisma from "../lib/prisma.js";
  */
 export async function createCustomer(req, res) {
   try {
-    const { name, industry, description, aiSummary, email, phone } = req.body;
+    const {
+      name,
+      industry,
+      description,
+      aiSummary,
+      email,
+      phone,
+      type,
+      taxId,
+    } = req.body;
     const userId = req.user.userId;
 
     const customer = await prisma.customer.create({
@@ -17,6 +26,8 @@ export async function createCustomer(req, res) {
         aiSummary,
         email,
         phone,
+        type,
+        taxId,
         userId,
       },
     });
@@ -59,7 +70,7 @@ export async function getCustomers(req, res) {
     const customersWithStats = customers.map((customer) => {
       const totalAmount = customer.quotes.reduce(
         (sum, q) => sum + (q.totalAmount || 0),
-        0
+        0,
       );
 
       // Calculate win rate or other stats if needed
@@ -131,7 +142,16 @@ export async function getCustomerById(req, res) {
 export async function updateCustomer(req, res) {
   try {
     const { id } = req.params;
-    const { name, industry, description, aiSummary, email, phone } = req.body;
+    const {
+      name,
+      industry,
+      description,
+      aiSummary,
+      email,
+      phone,
+      type,
+      taxId,
+    } = req.body;
     const userId = req.user.userId;
 
     const customer = await prisma.customer.update({
@@ -143,6 +163,8 @@ export async function updateCustomer(req, res) {
         aiSummary,
         email,
         phone,
+        type,
+        taxId,
       },
     });
 
