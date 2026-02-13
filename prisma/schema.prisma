@@ -111,6 +111,9 @@ model SystemSettings {
   // Materials (New)
   materials    Json? // Array of { id: String, name: String, unit: String, price: Number }
 
+  // Quote Configuration
+  quoteValidityDays Int? @default(30)
+
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id])

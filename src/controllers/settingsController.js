@@ -20,6 +20,7 @@ export async function getSettings(req, res) {
           companyName: "My Company",
           targetMarginMin: 20,
           targetMarginMax: 40,
+          quoteValidityDays: 30,
         },
       });
     }
@@ -29,7 +30,8 @@ export async function getSettings(req, res) {
     console.error("Get settings error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch settings",
+      message: `Failed to fetch settings: ${error.message}`,
+      stack: error.stack,
     });
   }
 }
@@ -55,6 +57,7 @@ export async function updateSettings(req, res) {
       roleRates, // Dynamic role rates
       projectTypes, // Dynamic project types
       materials, // Dynamic materials
+      quoteValidityDays,
     } = req.body;
 
     const settings = await prisma.systemSettings.upsert({
@@ -77,6 +80,9 @@ export async function updateSettings(req, res) {
         roleRates: roleRates || undefined,
         projectTypes: projectTypes || undefined,
         materials: materials || undefined,
+        quoteValidityDays: quoteValidityDays
+          ? parseInt(quoteValidityDays)
+          : undefined,
       },
       create: {
         userId,
@@ -97,6 +103,9 @@ export async function updateSettings(req, res) {
         roleRates: roleRates || undefined,
         projectTypes: projectTypes || undefined,
         materials: materials || undefined,
+        quoteValidityDays: quoteValidityDays
+          ? parseInt(quoteValidityDays)
+          : undefined,
       },
     });
 
@@ -105,7 +114,8 @@ export async function updateSettings(req, res) {
     console.error("Update settings error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to update settings",
+      message: `Failed to update settings: ${error.message}`,
+      stack: error.stack,
     });
   }
 }
