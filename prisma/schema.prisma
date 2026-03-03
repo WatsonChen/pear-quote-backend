@@ -14,6 +14,59 @@ datasource db {
   provider = "postgresql"
 }
 
+model Workspace {
+  id               String   @id @default(uuid())
+  name             String
+  subscriptionPlan String   @default("FREE") // "FREE" or "PRO"
+  creditBalance    Int      @default(0)
+
+  // Payment integration
+  ecpayToken       String?
+  nextBillingDate  DateTime?
+
+  users            WorkspaceUser[]
+  quotes           Quote[]
+  customers        Customer[]
+  settings         SystemSettings?
+  orders           Order[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model WorkspaceUser {
+  userId      String
+  workspaceId String
+  role        String   @default("MEMBER") // "OWNER", "ADMIN", "MEMBER"
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@id([userId, workspaceId])
+}
+
+model Order {
+  id              String   @id @default(uuid())
+  orderNo         String   @unique // For ECPay MerchantTradeNo
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id])
+  
+  amount          Int
+  creditsAdded    Int
+  status          String   @default("PENDING") // "PENDING", "PAID", "FAILED"
+  paymentMethod   String?
+  
+  // ECPay specific
+  tradeNo         String?  // ECPay TradeNo
+  paymentDate     DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model Quote {
   id String @id @default(uuid())
 
@@ -38,8 +91,9 @@ model Quote {
   paymentTerms String?
   validityDays Int?     @default(30)
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  // Workspace Relation
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
 
   items QuoteItem[]
 
@@ -58,8 +112,9 @@ model Customer {
   type        String  @default("company") // "company" or "personal"
   taxId       String?
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  // Workspace Relation
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   quotes Quote[]
 
@@ -115,8 +170,9 @@ model SystemSettings {
   quoteValidityDays Int? @default(30)
 
 
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
+  // Workspace Relation
+  workspaceId  String    @unique
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
 
   updatedAt DateTime @updatedAt
 }
@@ -125,11 +181,10 @@ model User {
   id           String    @id @default(uuid())
   email        String    @unique
   passwordHash String?
+  phoneNumber  String?   @unique // For SMS verification
   otpCode      String?
   otpExpiresAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-  quotes       Quote[]
-  customers    Customer[]
-  settings     SystemSettings?
+  workspaces   WorkspaceUser[]
 }
