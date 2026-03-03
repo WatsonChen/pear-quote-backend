@@ -16,7 +16,7 @@ export async function createCustomer(req, res) {
       type,
       taxId,
     } = req.body;
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
 
     const customer = await prisma.customer.create({
       data: {
@@ -28,7 +28,7 @@ export async function createCustomer(req, res) {
         phone,
         type,
         taxId,
-        userId,
+        workspaceId,
       },
     });
 
@@ -49,9 +49,9 @@ export async function createCustomer(req, res) {
  */
 export async function getCustomers(req, res) {
   try {
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
     const customers = await prisma.customer.findMany({
-      where: { userId },
+      where: { workspaceId },
       orderBy: { createdAt: "desc" },
       include: {
         quotes: {
@@ -103,10 +103,10 @@ export async function getCustomers(req, res) {
 export async function getCustomerById(req, res) {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
 
     const customer = await prisma.customer.findFirst({
-      where: { id, userId },
+      where: { id, workspaceId },
       include: {
         quotes: {
           orderBy: { createdAt: "desc" },
@@ -152,10 +152,10 @@ export async function updateCustomer(req, res) {
       type,
       taxId,
     } = req.body;
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
 
     const customer = await prisma.customer.update({
-      where: { id, userId },
+      where: { id, workspaceId },
       data: {
         name,
         industry,
@@ -185,10 +185,10 @@ export async function updateCustomer(req, res) {
 export async function deleteCustomer(req, res) {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
 
     await prisma.customer.delete({
-      where: { id, userId },
+      where: { id, workspaceId },
     });
 
     return res.json({ success: true, message: "Customer deleted" });

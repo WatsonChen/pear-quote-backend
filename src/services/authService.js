@@ -61,6 +61,9 @@ export async function verifyPassword(email, password) {
     throw new Error("Invalid email or password");
   }
 
+  // Ensure workspace exists
+  const workspace = await ensureUserWorkspace(user.id, user.email);
+
   // Generate Token
   const token = signToken({
     userId: user.id,
@@ -72,8 +75,39 @@ export async function verifyPassword(email, password) {
     user: {
       id: user.id,
       email: user.email,
+      workspaceId: workspace.id, // default active workspace
     },
   };
+}
+
+/**
+ * Ensures the user has at least one workspace. If not, creates a default one.
+ */
+async function ensureUserWorkspace(userId, email) {
+  const existingLinks = await prisma.workspaceUser.findMany({
+    where: { userId },
+    include: { workspace: true },
+  });
+
+  if (existingLinks.length > 0) {
+    return existingLinks[0].workspace;
+  }
+
+  const workspaceName = email.split("@")[0] + "'s Workspace";
+  const workspace = await prisma.workspace.create({
+    data: {
+      name: workspaceName,
+      subscriptionPlan: "FREE",
+      creditBalance: 500, // Initial free credits
+      users: {
+        create: {
+          userId,
+          role: "OWNER",
+        },
+      },
+    },
+  });
+  return workspace;
 }
 
 /**
@@ -98,7 +132,13 @@ export async function getUserById(userId) {
     select: {
       id: true,
       email: true,
+      phoneNumber: true,
       createdAt: true,
+      workspaces: {
+        include: {
+          workspace: true,
+        },
+      },
     },
   });
 
@@ -125,6 +165,9 @@ export async function socialLogin(email) {
     },
   });
 
+  // Ensure workspace exists
+  const workspace = await ensureUserWorkspace(user.id, user.email);
+
   // Generate Token
   const token = signToken({
     userId: user.id,
@@ -136,6 +179,7 @@ export async function socialLogin(email) {
     user: {
       id: user.id,
       email: user.email,
+      workspaceId: workspace.id, // default active workspace
     },
   };
 }

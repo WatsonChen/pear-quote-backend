@@ -19,7 +19,7 @@ export async function createQuote(req, res) {
       wonAmount, // Add - actual deal amount
     } = req.body;
 
-    const userId = req.user.userId; // From authMiddleware
+    const workspaceId = req.workspace?.id;
 
     // Calculate total amount
     const totalAmount = items.reduce(
@@ -44,7 +44,7 @@ export async function createQuote(req, res) {
         wonAmount: wonAmount ? parseFloat(wonAmount) : null, // Add
         paymentTerms, // Add
         validityDays: validityDays ? parseInt(validityDays) : 30, // Add with default
-        userId,
+        workspaceId,
         items: {
           create: items.map((item) => ({
             description: item.description,
@@ -78,16 +78,16 @@ export async function createQuote(req, res) {
  */
 export async function getQuotes(req, res) {
   try {
-    console.log("getQuotes called. User:", req.user);
-    const userId = req.user?.userId;
+    console.log("getQuotes called. Workspace:", req.workspace);
+    const workspaceId = req.workspace?.id;
 
-    if (!userId) {
-      console.error("User ID missing in request");
-      return res.status(400).json({ message: "User ID missing" });
+    if (!workspaceId) {
+      console.error("Workspace ID missing in request");
+      return res.status(400).json({ message: "Workspace ID missing" });
     }
 
     const quotes = await prisma.quote.findMany({
-      where: { userId },
+      where: { workspaceId },
       orderBy: { createdAt: "desc" },
       include: {
         customer: {
@@ -117,7 +117,7 @@ export async function getQuotes(req, res) {
 export async function getQuoteById(req, res) {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
 
     const quote = await prisma.quote.findUnique({
       where: { id },
@@ -131,7 +131,7 @@ export async function getQuoteById(req, res) {
       return res.status(404).json({ message: "Quote not found" });
     }
 
-    if (quote.userId !== userId) {
+    if (quote.workspaceId !== workspaceId) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
@@ -166,14 +166,14 @@ export async function updateQuote(req, res) {
       wonAmount, // Add - actual deal amount
     } = req.body;
 
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
 
     // Verify ownership
     const existingQuote = await prisma.quote.findUnique({
       where: { id },
     });
 
-    if (!existingQuote || existingQuote.userId !== userId) {
+    if (!existingQuote || existingQuote.workspaceId !== workspaceId) {
       return res.status(404).json({ message: "Quote not found" });
     }
 
@@ -259,14 +259,14 @@ export async function updateQuote(req, res) {
 export async function deleteQuote(req, res) {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
 
     // Verify ownership
     const existingQuote = await prisma.quote.findUnique({
       where: { id },
     });
 
-    if (!existingQuote || existingQuote.userId !== userId) {
+    if (!existingQuote || existingQuote.workspaceId !== workspaceId) {
       return res.status(404).json({ message: "Quote not found" });
     }
 

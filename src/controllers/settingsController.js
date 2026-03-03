@@ -6,17 +6,17 @@ import prisma from "../lib/prisma.js";
  */
 export async function getSettings(req, res) {
   try {
-    const userId = req.user.userId;
-    // Assuming each user has their own settings record
+    const workspaceId = req.workspace?.id;
+    // Assuming each workspace has their own settings record
     let settings = await prisma.systemSettings.findUnique({
-      where: { userId },
+      where: { workspaceId },
     });
 
     if (!settings) {
       // Create default settings if not exists for this user
       settings = await prisma.systemSettings.create({
         data: {
-          userId,
+          workspaceId,
           companyName: "My Company",
           targetMarginMin: 20,
           targetMarginMax: 40,
@@ -42,7 +42,7 @@ export async function getSettings(req, res) {
  */
 export async function updateSettings(req, res) {
   try {
-    const userId = req.user.userId;
+    const workspaceId = req.workspace?.id;
     const {
       companyName,
       taxId,
@@ -61,7 +61,7 @@ export async function updateSettings(req, res) {
     } = req.body;
 
     const settings = await prisma.systemSettings.upsert({
-      where: { userId },
+      where: { workspaceId },
       update: {
         companyName,
         taxId,
@@ -85,7 +85,7 @@ export async function updateSettings(req, res) {
           : undefined,
       },
       create: {
-        userId,
+        workspaceId,
         companyName,
         taxId,
         contactEmail,

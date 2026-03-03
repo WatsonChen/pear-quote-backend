@@ -4,7 +4,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const getAnalyticsMetrics = async (req, res) => {
-  const userId = req.user.userId;
+  const workspaceId = req.workspace?.id;
 
   try {
     const now = new Date();
@@ -27,7 +27,7 @@ export const getAnalyticsMetrics = async (req, res) => {
       await Promise.all([
         prisma.quote.findMany({
           where: {
-            userId,
+            workspaceId,
             createdAt: {
               gte: currentMonthStart,
               lt: nextMonthStart,
@@ -37,7 +37,7 @@ export const getAnalyticsMetrics = async (req, res) => {
         }),
         prisma.quote.findMany({
           where: {
-            userId,
+            workspaceId,
             createdAt: {
               gte: prevMonthStart,
               lt: prevMonthEnd,
@@ -47,7 +47,7 @@ export const getAnalyticsMetrics = async (req, res) => {
         }),
         prisma.quote.findMany({
           where: {
-            userId,
+            workspaceId,
             createdAt: {
               gte: trendStart,
             },
@@ -170,11 +170,11 @@ export const getAnalyticsMetrics = async (req, res) => {
 };
 
 export const getAnalyticsProjects = async (req, res) => {
-  const userId = req.user.userId;
+  const workspaceId = req.workspace?.id;
 
   try {
     const projects = await prisma.quote.findMany({
-      where: { userId },
+      where: { workspaceId },
       include: {
         customer: true,
       },
@@ -231,13 +231,13 @@ export const getAnalyticsProjects = async (req, res) => {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
 
 export const postAnalyticsInsight = async (req, res) => {
-  const userId = req.user.userId;
+  const workspaceId = req.workspace?.id;
 
   try {
     // 1. Fetch data for the prompt
     const [quotes, projects] = await Promise.all([
       prisma.quote.findMany({
-        where: { userId },
+        where: { workspaceId },
         select: {
           totalAmount: true,
           totalMargin: true,
@@ -249,7 +249,7 @@ export const postAnalyticsInsight = async (req, res) => {
         },
       }),
       prisma.quote.findMany({
-        where: { userId },
+        where: { workspaceId },
         orderBy: { totalAmount: "desc" },
         take: 5,
       }),

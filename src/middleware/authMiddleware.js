@@ -1,12 +1,13 @@
-// src/middleware/authMiddleware.js
 import { verifyToken } from "../lib/jwt.js";
+import prisma from "../lib/prisma.js";
 
 /**
  * Middleware to verify JWT token and authenticate user
  * Extracts token from Authorization header (Bearer token)
  * Injects user info into req.user
+ * Also extracts X-Workspace-Id and injects req.workspace
  */
-export function authMiddleware(req, res, next) {
+export async function authMiddleware(req, res, next) {
   try {
     // Get token from Authorization header
     const authHeader = req.headers.authorization;
@@ -38,8 +39,49 @@ export function authMiddleware(req, res, next) {
       email: decoded.email,
     };
 
+    // Verify Workspace Access if X-Workspace-Id is provided
+    let workspaceId = req.headers["x-workspace-id"];
+    let workspaceUser;
+
+    // Check for string "undefined" or "null" from localStorage issues
+    if (workspaceId === "undefined" || workspaceId === "null") {
+      workspaceId = undefined;
+    }
+
+    if (workspaceId) {
+      workspaceUser = await prisma.workspaceUser.findUnique({
+        where: {
+          userId_workspaceId: {
+            userId: decoded.userId,
+            workspaceId: workspaceId,
+          },
+        },
+        include: {
+          workspace: true,
+        },
+      });
+    } else {
+      // Fallback to the first available workspace if header is missing
+      const workspaces = await prisma.workspaceUser.findMany({
+        where: { userId: decoded.userId },
+        include: { workspace: true },
+        take: 1,
+      });
+      if (workspaces.length > 0) {
+        workspaceUser = workspaces[0];
+      }
+    }
+
+    if (workspaceUser) {
+      req.workspace = workspaceUser.workspace;
+      req.workspaceRole = workspaceUser.role;
+    } else {
+      console.warn(`User ${decoded.userId} has no workspaces.`);
+    }
+
     next();
   } catch (error) {
+    console.error("Auth middleware error:", error);
     return res.status(401).json({
       success: false,
       message: error.message || "Invalid or expired token",

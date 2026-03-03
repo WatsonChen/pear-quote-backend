@@ -9,6 +9,23 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
 export async function analyzeRequirements(req, res) {
   try {
     const { requirements, images } = req.body;
+    const workspaceId = req.workspace?.id;
+    const creditCost = 10;
+
+    // Check credits
+    if (!workspaceId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Workspace not found" });
+    }
+
+    if (req.workspace.creditBalance < creditCost) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient credits. Please top up your account.",
+        errorCode: "INSUFFICIENT_CREDITS",
+      });
+    }
 
     // Allow empty requirements if images are provided
     if (!requirements && (!images || images.length === 0)) {
@@ -100,6 +117,16 @@ ${requirements}
         `Failed to parse AI response as JSON: ${parseError.message}`,
       );
     }
+
+    // Deduct credits after a successful parse
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        creditBalance: {
+          decrement: creditCost,
+        },
+      },
+    });
 
     return res.json({
       summary: parsedResult.summary,

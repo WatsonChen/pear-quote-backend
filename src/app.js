@@ -7,8 +7,10 @@ import aiRoutes from "./routes/aiRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import workspaceRoutes from "./routes/workspaceRoutes.js";
 import baseRoutes from "./routes/baseRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 
 const app = express();
 
@@ -37,8 +39,10 @@ app.use("/api/quotes", quoteRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Swagger Documentation
 import swaggerUi from "swagger-ui-express";
