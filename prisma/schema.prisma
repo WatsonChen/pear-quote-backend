@@ -87,7 +87,9 @@ model Quote {
   totalMargin Float?
   totalCost   Float?
 
-  // Terms
+  // Terms and Rates
+  roleRates    Json?    // Optional project-scoped role rates
+  materials    Json?    // Optional project-scoped materials
   paymentTerms String?
   validityDays Int?     @default(30)
 

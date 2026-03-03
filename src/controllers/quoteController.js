@@ -17,6 +17,8 @@ export async function createQuote(req, res) {
       paymentTerms, // Add
       validityDays, // Add
       wonAmount, // Add - actual deal amount
+      roleRates, // Add
+      materials, // Add
     } = req.body;
 
     const workspaceId = req.workspace?.id;
@@ -45,11 +47,15 @@ export async function createQuote(req, res) {
         paymentTerms, // Add
         validityDays: validityDays ? parseInt(validityDays) : 30, // Add with default
         workspaceId,
+        roleRates: roleRates || null,
+        materials: materials || null,
         items: {
           create: items.map((item) => ({
             description: item.description,
+            type: item.type || "service", // Add
             estimatedHours: parseFloat(item.estimatedHours || 0),
             suggestedRole: item.suggestedRole,
+            unit: item.unit || null, // Add
             hourlyRate: parseFloat(item.hourlyRate || 0),
             amount: parseFloat(item.amount || 0),
           })),
@@ -164,6 +170,8 @@ export async function updateQuote(req, res) {
       paymentTerms, // Add
       validityDays, // Add
       wonAmount, // Add - actual deal amount
+      roleRates, // Add
+      materials, // Add
     } = req.body;
 
     const workspaceId = req.workspace?.id;
@@ -204,6 +212,8 @@ export async function updateQuote(req, res) {
               : undefined, // Add
           paymentTerms, // Add
           validityDays: validityDays ? parseInt(validityDays) : undefined, // Add
+          roleRates: roleRates !== undefined ? roleRates : undefined, // Add
+          materials: materials !== undefined ? materials : undefined, // Add
         },
       });
 
@@ -219,10 +229,12 @@ export async function updateQuote(req, res) {
           data: items.map((item) => ({
             quoteId: id,
             description: item.description || "",
+            type: item.type || "service", // Add
             estimatedHours: item.estimatedHours
               ? parseFloat(item.estimatedHours)
               : 0,
             suggestedRole: item.suggestedRole || "",
+            unit: item.unit || null, // Add
             hourlyRate: item.hourlyRate ? parseFloat(item.hourlyRate) : 0,
             amount: item.amount ? parseFloat(item.amount) : 0,
           })),
