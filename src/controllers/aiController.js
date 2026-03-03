@@ -13,14 +13,24 @@ export async function analyzeRequirements(req, res) {
     const workspaceId = req.workspace?.id;
     const creditCost = 10;
 
-    // Check credits
     if (!workspaceId) {
       return res
         .status(401)
         .json({ success: false, message: "Workspace not found" });
     }
 
-    if (req.workspace.creditBalance < creditCost) {
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { creditBalance: true },
+    });
+
+    if (!workspace) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Workspace does not exist" });
+    }
+
+    if (workspace.creditBalance < creditCost) {
       return res.status(403).json({
         success: false,
         message: "Insufficient credits. Please top up your account.",
