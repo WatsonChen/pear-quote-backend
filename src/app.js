@@ -15,6 +15,16 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 const app = express();
 
 // CORS configuration
+
+const allowlist = [
+  "http://localhost:3000",
+  "http://localhost:3004",
+  "https://pear-quote-web.vercel.app",
+  "https://pearquote.com",
+  "https://www.pearquote.com",
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 const corsOptions = {
   origin: [
     "http://localhost:3000",
@@ -25,12 +35,13 @@ const corsOptions = {
     process.env.FRONTEND_URL,
   ].filter(Boolean),
   credentials: true,
-  optionsSuccessStatus: 200,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Workspace-Id"],
+  optionsSuccessStatus: 204,
 };
 
 // Middlewares
+app.options("*", cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
