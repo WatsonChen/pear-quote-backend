@@ -19,6 +19,7 @@ const corsOptions = {
   origin: [
     "http://localhost:3000",
     "https://pear-quote-web.vercel.app",
+    "https://api.pearquote.com",
     process.env.FRONTEND_URL,
   ].filter(Boolean),
   credentials: true,
