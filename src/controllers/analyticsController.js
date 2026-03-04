@@ -261,6 +261,32 @@ export const postAnalyticsInsight = async (req, res) => {
       });
     }
 
+    // 1.5 Deduct Credits (10 credits for AI insight)
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        workspaces: {
+          where: { workspaceId },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    const hasCredits = await checkAndDeductCredits(
+      req.user.id,
+      10,
+      "GENERATE_INSIGHT",
+    );
+    if (!hasCredits) {
+      return res.status(403).json({
+        message: "Insufficient credits",
+        error: "INSUFFICIENT_CREDITS",
+      });
+    }
+
     // 2. Calculate key metrics for the AI
     const totalQuoted = quotes.reduce(
       (sum, q) => sum + (q.totalAmount || 0),
@@ -306,6 +332,16 @@ ${dataSummary}
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
+
+    // 4. Deduct credits after successful AI generation
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        creditBalance: {
+          decrement: creditCost,
+        },
+      },
+    });
 
     res.json({
       insight: text.trim(),
