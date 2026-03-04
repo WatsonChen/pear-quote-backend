@@ -19,6 +19,17 @@ export async function analyzeRequirements(req, res) {
         .json({ success: false, message: "Workspace not found" });
     }
 
+    // STRICT CHECK: Do not allow AI Analysis if the workspace is implicitly determined via fallback.
+    // The frontend must explicitly specify the WorkspaceId to prevent accidental point deduction.
+    if (req.isFallbackWorkspace) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Unable to verify current workspace ID. Please select a workspace.",
+        errorCode: "WORKSPACE_ID_MISSING",
+      });
+    }
+
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { creditBalance: true },

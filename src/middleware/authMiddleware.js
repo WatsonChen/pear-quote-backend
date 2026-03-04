@@ -61,7 +61,11 @@ export async function authMiddleware(req, res, next) {
         },
       });
     } else {
-      // Fallback to the first available workspace if header is missing
+      // Fallback is DANGEROUS for credit-based actions
+      // However, to prevent breaking the entire app, we will still allow fallback
+      // BUT we inject a flag to strictly warn endpoints like AI analysis.
+      req.isFallbackWorkspace = true;
+
       const workspaces = await prisma.workspaceUser.findMany({
         where: { userId: decoded.userId },
         include: { workspace: true },
