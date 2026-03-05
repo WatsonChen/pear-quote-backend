@@ -1,11 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -15,177 +7,135 @@ datasource db {
 }
 
 model Workspace {
-  id               String @id @default(uuid())
+  id               String          @id @default(uuid())
   name             String
-  subscriptionPlan String @default("FREE") // "FREE" or "PRO"
-  creditBalance    Int    @default(0)
-
-  // Payment integration
-  ecpayToken      String?
-  nextBillingDate DateTime?
-
-  users     WorkspaceUser[]
-  quotes    Quote[]
-  customers Customer[]
-  settings  SystemSettings?
-  orders    Order[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  subscriptionPlan String          @default("FREE")
+  creditBalance    Int             @default(0)
+  ecpayToken       String?
+  nextBillingDate  DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  customers        Customer[]
+  orders           Order[]
+  quotes           Quote[]
+  settings         SystemSettings?
+  users            WorkspaceUser[]
 }
 
 model WorkspaceUser {
   userId      String
   workspaceId String
-  role        String @default("MEMBER") // "OWNER", "ADMIN", "MEMBER"
-
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role        String    @default("MEMBER")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@id([userId, workspaceId])
 }
 
 model Order {
-  id          String    @id @default(uuid())
-  orderNo     String    @unique // For ECPay MerchantTradeNo
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
-
+  id            String    @id @default(uuid())
+  orderNo       String    @unique
+  workspaceId   String
   amount        Int
   creditsAdded  Int
-  status        String  @default("PENDING") // "PENDING", "PAID", "FAILED"
+  status        String    @default("PENDING")
   paymentMethod String?
-
-  // ECPay specific
-  tradeNo     String? // ECPay TradeNo
-  paymentDate DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  tradeNo       String?
+  paymentDate   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
 }
 
 model Quote {
-  id String @id @default(uuid())
-
-  // Customer Relation
-  customerId   String?
-  customer     Customer? @relation(fields: [customerId], references: [id])
-  customerName String // Keep for display/snapshot purposes
-
+  id           String      @id @default(uuid())
+  createdAt    DateTime    @default(now())
+  customerName String
+  description  String?
+  expectedDays Int?
   projectName  String
   projectType  String
-  expectedDays Int?
-  description  String?
-  status       String  @default("DRAFT")
-
-  // Financials
-  totalAmount Float?
-  wonAmount   Float? // Actual deal amount when status is WON
-  totalMargin Float?
-  totalCost   Float?
-
-  // Terms and Rates
-  roleRates    Json? // Optional project-scoped role rates
-  materials    Json? // Optional project-scoped materials
+  status       String      @default("DRAFT")
+  totalAmount  Float?
+  updatedAt    DateTime    @updatedAt
+  customerId   String?
+  totalCost    Float?
+  totalMargin  Float?
   paymentTerms String?
-  validityDays Int?    @default(30)
-
-  // Workspace Relation
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
-
-  items QuoteItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  validityDays Int?        @default(30)
+  wonAmount    Float?
+  workspaceId  String
+  materials    Json?
+  roleRates    Json?
+  customer     Customer?   @relation(fields: [customerId], references: [id])
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id])
+  items        QuoteItem[]
 }
 
 model Customer {
-  id          String  @id @default(uuid())
+  id          String    @id @default(uuid())
   name        String
   industry    String?
   description String?
   aiSummary   String?
   email       String?
   phone       String?
-  type        String  @default("company") // "company" or "personal"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   taxId       String?
-
-  // Workspace Relation
+  type        String    @default("company")
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
-
-  quotes Quote[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  quotes      Quote[]
 }
 
 model QuoteItem {
-  id      String @id @default(uuid())
-  quoteId String
-  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-
+  id             String   @id @default(uuid())
+  quoteId        String
   description    String
-  type           String  @default("service") // "service" or "material"
-  estimatedHours Float? // Optional for material
-  suggestedRole  String? // Optional for material
-  unit           String? // For material e.g. "kg", "pc"
-  hourlyRate     Float // Or unit price for material
+  estimatedHours Float?
+  suggestedRole  String?
+  hourlyRate     Float
   amount         Float
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  type           String   @default("service")
+  unit           String?
+  quote          Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 }
 
 model SystemSettings {
-  id           String  @id @default(uuid())
-  companyName  String?
-  taxId        String?
-  contactEmail String?
-
-  // Rates
-  juniorRate Float?
-  seniorRate Float?
-  pmRate     Float?
-  designRate Float?
-  roleRates  Json? // Array of { role: String, rate: Number }
-
-  // Margin
-  targetMarginMin Float?
-  targetMarginMax Float?
-
-  // Stamps
-  companySealUrl               String?
+  id                           String    @id @default(uuid())
+  companyName                  String?
+  taxId                        String?
+  contactEmail                 String?
+  juniorRate                   Float?
+  seniorRate                   Float?
+  pmRate                       Float?
+  designRate                   Float?
+  targetMarginMin              Float?
+  targetMarginMax              Float?
+  updatedAt                    DateTime  @updatedAt
   companyRepresentativeSealUrl String?
-
-  // Project Types (Customizable)
-  projectTypes Json? // Array of { value: String, label: String }
-
-  // Materials (New)
-  materials Json? // Array of { id: String, name: String, unit: String, price: Number }
-
-  // Quote Configuration
-  quoteValidityDays Int? @default(30)
-
-  // Workspace Relation
-  workspaceId String    @unique
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
-
-  updatedAt DateTime @updatedAt
+  companySealUrl               String?
+  roleRates                    Json?
+  projectTypes                 Json?
+  materials                    Json?
+  quoteValidityDays            Int?      @default(30)
+  workspaceId                  String    @unique
+  workspace                    Workspace @relation(fields: [workspaceId], references: [id])
 }
 
 model User {
   id           String          @id @default(uuid())
   email        String          @unique
   passwordHash String?
-  phoneNumber  String?         @unique // For SMS verification
   otpCode      String?
   otpExpiresAt DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+  phoneNumber  String?         @unique
   workspaces   WorkspaceUser[]
 }
