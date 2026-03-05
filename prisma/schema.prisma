@@ -15,56 +15,56 @@ datasource db {
 }
 
 model Workspace {
-  id               String   @id @default(uuid())
+  id               String @id @default(uuid())
   name             String
-  subscriptionPlan String   @default("FREE") // "FREE" or "PRO"
-  creditBalance    Int      @default(0)
+  subscriptionPlan String @default("FREE") // "FREE" or "PRO"
+  creditBalance    Int    @default(0)
 
   // Payment integration
-  ecpayToken       String?
-  nextBillingDate  DateTime?
+  ecpayToken      String?
+  nextBillingDate DateTime?
 
-  users            WorkspaceUser[]
-  quotes           Quote[]
-  customers        Customer[]
-  settings         SystemSettings?
-  orders           Order[]
+  users     WorkspaceUser[]
+  quotes    Quote[]
+  customers Customer[]
+  settings  SystemSettings?
+  orders    Order[]
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model WorkspaceUser {
   userId      String
   workspaceId String
-  role        String   @default("MEMBER") // "OWNER", "ADMIN", "MEMBER"
+  role        String @default("MEMBER") // "OWNER", "ADMIN", "MEMBER"
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@id([userId, workspaceId])
 }
 
 model Order {
-  id              String   @id @default(uuid())
-  orderNo         String   @unique // For ECPay MerchantTradeNo
-  workspaceId     String
-  workspace       Workspace @relation(fields: [workspaceId], references: [id])
-  
-  amount          Int
-  creditsAdded    Int
-  status          String   @default("PENDING") // "PENDING", "PAID", "FAILED"
-  paymentMethod   String?
-  
-  // ECPay specific
-  tradeNo         String?  // ECPay TradeNo
-  paymentDate     DateTime?
+  id          String    @id @default(uuid())
+  orderNo     String    @unique // For ECPay MerchantTradeNo
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  amount        Int
+  creditsAdded  Int
+  status        String  @default("PENDING") // "PENDING", "PAID", "FAILED"
+  paymentMethod String?
+
+  // ECPay specific
+  tradeNo     String? // ECPay TradeNo
+  paymentDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Quote {
@@ -88,14 +88,14 @@ model Quote {
   totalCost   Float?
 
   // Terms and Rates
-  roleRates    Json?    // Optional project-scoped role rates
-  materials    Json?    // Optional project-scoped materials
+  roleRates    Json? // Optional project-scoped role rates
+  materials    Json? // Optional project-scoped materials
   paymentTerms String?
-  validityDays Int?     @default(30)
+  validityDays Int?    @default(30)
 
   // Workspace Relation
-  workspaceId  String
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   items QuoteItem[]
 
@@ -131,10 +131,10 @@ model QuoteItem {
 
   description    String
   type           String  @default("service") // "service" or "material"
-  estimatedHours Float?  // Optional for material
+  estimatedHours Float? // Optional for material
   suggestedRole  String? // Optional for material
   unit           String? // For material e.g. "kg", "pc"
-  hourlyRate     Float   // Or unit price for material
+  hourlyRate     Float // Or unit price for material
   amount         Float
 
   createdAt DateTime @default(now())
@@ -166,27 +166,26 @@ model SystemSettings {
   projectTypes Json? // Array of { value: String, label: String }
 
   // Materials (New)
-  materials    Json? // Array of { id: String, name: String, unit: String, price: Number }
+  materials Json? // Array of { id: String, name: String, unit: String, price: Number }
 
   // Quote Configuration
   quoteValidityDays Int? @default(30)
 
-
   // Workspace Relation
-  workspaceId  String    @unique
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   updatedAt DateTime @updatedAt
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
+  id           String          @id @default(uuid())
+  email        String          @unique
   passwordHash String?
-  phoneNumber  String?   @unique // For SMS verification
+  phoneNumber  String?         @unique // For SMS verification
   otpCode      String?
   otpExpiresAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
   workspaces   WorkspaceUser[]
 }

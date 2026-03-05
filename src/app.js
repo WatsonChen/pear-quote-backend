@@ -20,6 +20,8 @@ const corsOptions = {
     "http://localhost:3000",
     "https://pear-quote-web.vercel.app",
     "https://api.pearquote.com",
+    "https://pearquote.com",
+    "https://www.pearquote.com",
     process.env.FRONTEND_URL,
   ].filter(Boolean),
   credentials: true,
