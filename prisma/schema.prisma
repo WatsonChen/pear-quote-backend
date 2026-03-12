@@ -10,7 +10,7 @@ model Workspace {
   id               String          @id @default(uuid())
   name             String
   subscriptionPlan String          @default("FREE")
-  creditBalance    Int             @default(0)
+  creditBalance    Int             @default(20)
   ecpayToken       String?
   nextBillingDate  DateTime?
   createdAt        DateTime        @default(now())

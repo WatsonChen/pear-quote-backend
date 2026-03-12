@@ -98,7 +98,7 @@ async function ensureUserWorkspace(userId, email) {
     data: {
       name: workspaceName,
       subscriptionPlan: "FREE",
-      creditBalance: 500, // Initial free credits
+      creditBalance: 20, // Initial free trial credits
       users: {
         create: {
           userId,

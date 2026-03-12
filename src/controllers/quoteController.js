@@ -295,3 +295,74 @@ export async function deleteQuote(req, res) {
     });
   }
 }
+
+/**
+ * Generate quote document (PDF) — deducts credits
+ * POST /api/quotes/:id/generate
+ */
+export async function generateQuote(req, res) {
+  try {
+    const { id } = req.params;
+    const workspaceId = req.workspace?.id;
+    const creditCost = 10;
+
+    if (!workspaceId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Workspace not found" });
+    }
+
+    // Verify quote belongs to this workspace
+    const quote = await prisma.quote.findUnique({
+      where: { id },
+    });
+
+    if (!quote || quote.workspaceId !== workspaceId) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quote not found" });
+    }
+
+    // Check credit balance
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { creditBalance: true },
+    });
+
+    if (!workspace) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Workspace does not exist" });
+    }
+
+    if (workspace.creditBalance < creditCost) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient credits. Please top up your account.",
+        errorCode: "INSUFFICIENT_CREDITS",
+      });
+    }
+
+    // Deduct credits
+    const updatedWorkspace = await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        creditBalance: {
+          decrement: creditCost,
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      remainingBalance: updatedWorkspace.creditBalance,
+    });
+  } catch (error) {
+    console.error("Generate quote error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate quote",
+      error: error.message,
+    });
+  }
+}
