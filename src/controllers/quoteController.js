@@ -366,3 +366,47 @@ export async function generateQuote(req, res) {
     });
   }
 }
+
+/**
+ * Premium export (Word/Excel data preparation)
+ * POST /api/quotes/:id/export
+ */
+export async function exportQuotePremium(req, res) {
+  try {
+    const { id } = req.params;
+    const { format } = req.body; // 'word' or 'excel'
+    const workspaceId = req.workspace?.id;
+
+    if (!workspaceId) {
+      return res.status(401).json({ success: false, message: "Workspace not found" });
+    }
+
+    const quote = await prisma.quote.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        customer: true,
+      },
+    });
+
+    if (!quote || quote.workspaceId !== workspaceId) {
+      return res.status(404).json({ success: false, message: "Quote not found" });
+    }
+
+    // In a real application, this would generate the actual Word/Excel buffer
+    // For now, we return the prepared data and a success flag
+    return res.json({
+      success: true,
+      message: `${format.toUpperCase()} export prepared successfully.`,
+      quoteData: quote,
+    });
+  } catch (error) {
+    console.error("Export quote error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to export quote",
+      error: error.message,
+    });
+  }
+}
+
