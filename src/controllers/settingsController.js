@@ -1,5 +1,4 @@
 import prisma from "../lib/prisma.js";
-import { SUBSCRIPTION_PLANS } from "../config/pricing.config.js";
 
 /**
  * Get system settings
@@ -60,15 +59,6 @@ export async function updateSettings(req, res) {
       materials, // Dynamic materials
       quoteValidityDays,
     } = req.body;
-
-    // Enforce Premium for companySealUrl
-    let finalCompanySealUrl = companySealUrl;
-    if (companySealUrl && req.workspace?.subscriptionPlan !== SUBSCRIPTION_PLANS.PREMIUM) {
-      return res.status(403).json({
-        success: false,
-        message: "companySealUrl requires a PREMIUM subscription.",
-      });
-    }
 
     const settings = await prisma.systemSettings.upsert({
       where: { workspaceId },
