@@ -2,6 +2,7 @@ import express from "express";
 import {
   createTopupOrder,
   handleWebhook,
+  handleReturn,
 } from "../controllers/paymentController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -20,5 +21,12 @@ router.post("/topup", authMiddleware, createTopupOrder);
  * @access Public
  */
 router.post("/webhook", handleWebhook);
+
+/**
+ * @route POST /api/payments/return
+ * @desc ECPay Client Return URL (Proxy redirect)
+ * @access Public
+ */
+router.all("/return", handleReturn);
 
 export default router;

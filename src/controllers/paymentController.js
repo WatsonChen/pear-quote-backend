@@ -1,62 +1,123 @@
 import prisma from "../lib/prisma.js";
 import crypto from "crypto";
 
-const ECPAY_HASH_KEY = process.env.ECPAY_HASH_KEY || "5294y06JbISpM5x9"; // Default test key
-const ECPAY_HASH_IV = process.env.ECPAY_HASH_IV || "v77hoKGq4kWxNNIS"; // Default test IV
-const ECPAY_MERCHANT_ID = process.env.ECPAY_MERCHANT_ID || "2000132"; // Default test MerchantID
-const ECPAY_URL =
-  process.env.ECPAY_URL ||
-  "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5";
+const NEWEBPAY_HASH_KEY = process.env.NEWEBPAY_HASH_KEY || "fIhp8AUb0OwHg3Q7uhKd4CX2rUa5MHB2";
+const NEWEBPAY_HASH_IV = process.env.NEWEBPAY_HASH_IV || "PyY9AgEt38LUf5JC";
+const NEWEBPAY_MERCHANT_ID = process.env.NEWEBPAY_MERCHANT_ID || "MS3824337262";
+const NEWEBPAY_URL =
+  process.env.NEWEBPAY_URL ||
+  "https://ccore.newebpay.com/MPG/mpg_gateway"; // Use test environment by default
 
-// Return URL (Webhook) endpoint
-const RETURN_URL =
-  process.env.ECPAY_RETURN_URL ||
-  "https://your-ngrok-url.ngrok-free.app/api/payments/webhook";
-const CLIENT_BACK_URL =
-  process.env.ECPAY_CLIENT_BACK_URL || "http://localhost:3000/admin/settings"; // Redirect after payment
+const DEFAULT_RETURN_PATH = "/admin/settings?tab=billing";
 
-function generateCheckMacValue(params) {
-  // 1. Sort parameters alphabetically by key
-  const sortedKeys = Object.keys(params).sort();
-  let str = `HashKey=${ECPAY_HASH_KEY}&`;
-
-  for (const key of sortedKeys) {
-    if (key !== "CheckMacValue" && params[key] !== "") {
-      str += `${key}=${params[key]}&`;
-    }
+function getOrigin(rawUrl) {
+  if (!rawUrl) {
+    return null;
   }
 
-  str += `HashIV=${ECPAY_HASH_IV}`;
+  try {
+    return new URL(rawUrl).origin;
+  } catch {
+    return null;
+  }
+}
 
-  // 2. URL Encode and replace specific characters based on ECPay spec
-  str = encodeURIComponent(str)
-    .replace(/%20/g, "+")
-    .replace(/%2d/g, "-")
-    .replace(/%5f/g, "_")
-    .replace(/%2e/g, ".")
-    .replace(/%21/g, "!")
-    .replace(/%2a/g, "*")
-    .replace(/%28/g, "(")
-    .replace(/%29/g, ")")
-    .toLowerCase();
+function resolveEndpointUrl(rawUrl, origin, fallbackPath) {
+  if (rawUrl) {
+    const resolvedUrl = new URL(rawUrl, origin);
+    if (!resolvedUrl.pathname || resolvedUrl.pathname === "/") {
+      const fallbackUrl = new URL(fallbackPath, origin);
+      resolvedUrl.pathname = fallbackUrl.pathname;
+      resolvedUrl.search = fallbackUrl.search;
+    }
+    return resolvedUrl.toString();
+  }
 
-  // 3. SHA256 hashing
-  const hash = crypto
-    .createHash("sha256")
-    .update(str)
-    .digest("hex")
-    .toUpperCase();
-  return hash;
+  return new URL(fallbackPath, origin).toString();
+}
+
+function sanitizeReturnPath(rawPath) {
+  if (typeof rawPath !== "string" || !rawPath.trim()) {
+    return DEFAULT_RETURN_PATH;
+  }
+
+  try {
+    const url = new URL(rawPath, "http://localhost");
+    const normalizedPath = `${url.pathname}${url.search}${url.hash}`;
+
+    if (!normalizedPath.startsWith("/") || normalizedPath.startsWith("//")) {
+      return DEFAULT_RETURN_PATH;
+    }
+
+    return normalizedPath;
+  } catch {
+    return DEFAULT_RETURN_PATH;
+  }
+}
+
+function buildFrontendRedirectUrl(returnPath) {
+  const frontendOrigin =
+    getOrigin(process.env.NEWEBPAY_CLIENT_BACK_URL) ||
+    process.env.FRONTEND_URL ||
+    "http://localhost:3000";
+
+  return new URL(sanitizeReturnPath(returnPath), frontendOrigin).toString();
+}
+
+const BACKEND_PUBLIC_ORIGIN =
+  process.env.NEWEBPAY_PUBLIC_BASE_URL ||
+  process.env.BACKEND_PUBLIC_URL ||
+  getOrigin(process.env.NEWEBPAY_SERVER_BACK_URL) ||
+  getOrigin(process.env.NEWEBPAY_WEBHOOK_URL) ||
+  "http://localhost:3001";
+
+const WEBHOOK_URL = resolveEndpointUrl(
+  process.env.NEWEBPAY_WEBHOOK_URL || process.env.ECPAY_RETURN_URL,
+  BACKEND_PUBLIC_ORIGIN,
+  "/api/payments/webhook",
+);
+const SERVER_BACK_URL = resolveEndpointUrl(
+  process.env.NEWEBPAY_SERVER_BACK_URL,
+  BACKEND_PUBLIC_ORIGIN,
+  "/api/payments/return",
+);
+
+function create_mpg_aes_encrypt(TradeInfo) {
+  const encrypt = crypto.createCipheriv("aes-256-cbc", NEWEBPAY_HASH_KEY, NEWEBPAY_HASH_IV);
+  const enc = encrypt.update(typeof TradeInfo === "string" ? TradeInfo : new URLSearchParams(TradeInfo).toString(), "utf8", "hex");
+  return enc + encrypt.final("hex");
+}
+
+function create_mpg_sha_encrypt(aesEncrypted) {
+  const sha = crypto.createHash("sha256");
+  const plainText = `HashKey=${NEWEBPAY_HASH_KEY}&${aesEncrypted}&HashIV=${NEWEBPAY_HASH_IV}`;
+  return sha.update(plainText).digest("hex").toUpperCase();
+}
+
+function create_mpg_aes_decrypt(TradeInfo) {
+  const decrypt = crypto.createDecipheriv("aes-256-cbc", NEWEBPAY_HASH_KEY, NEWEBPAY_HASH_IV);
+  decrypt.setAutoPadding(false);
+  const text = decrypt.update(TradeInfo, "hex", "utf8");
+  const plainText = text + decrypt.final("utf8");
+  const result = plainText.replace(/[\x00-\x1F]+/g, "");
+  return JSON.parse(result);
 }
 
 /**
- * Creates an ECPay Top-up Order and returns the HTML form to redirect
+ * Creates a NewebPay Top-up Order and returns the configuration for frontend form submission
  * POST /api/payments/topup
  */
 export async function createTopupOrder(req, res) {
   try {
     const workspaceId = req.workspace?.id;
-    const { amount, creditsAdded } = req.body;
+    const { amount, creditsAdded, returnPath } = req.body;
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        success: false,
+        message: "No active workspace found",
+      });
+    }
 
     if (!amount || !creditsAdded) {
       return res.status(400).json({
@@ -77,33 +138,45 @@ export async function createTopupOrder(req, res) {
       },
     });
 
-    // 2. Prepare ECPay Parameters
-    // ECPay date format: yyyy/MM/dd HH:mm:ss
-    const now = new Date();
-    const formattedDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    // 2. Prepare NewebPay Parameters
+    const safeReturnPath = sanitizeReturnPath(returnPath);
+    const returnUrl = new URL(SERVER_BACK_URL);
+    returnUrl.searchParams.set("redirect", safeReturnPath);
 
-    const params = {
-      MerchantID: ECPAY_MERCHANT_ID,
-      MerchantTradeNo: orderNo,
-      MerchantTradeDate: formattedDate,
-      PaymentType: "aio", // ALL in one
-      TotalAmount: amount.toString(), // Must be string/number without decimals
-      TradeDesc: `Pear AI Credits Top-up: ${creditsAdded} Points`,
-      ItemName: `Pear AI Credits x ${creditsAdded}`,
-      ReturnURL: RETURN_URL,
-      ClientBackURL: CLIENT_BACK_URL,
-      ChoosePayment: "Credit", // Force Credit Card
-      EncryptType: "1",
+    const TradeInfoParams = {
+      MerchantID: NEWEBPAY_MERCHANT_ID,
+      RespondType: "JSON",
+      TimeStamp: Math.floor(Date.now() / 1000).toString(),
+      Version: "2.0",
+      MerchantOrderNo: orderNo,
+      Amt: parseInt(amount),
+      ItemDesc: `Pear AI Credits x ${creditsAdded}`,
+      ReturnURL: returnUrl.toString(), // Backend redirect proxy
+      NotifyURL: WEBHOOK_URL, // Server webhook
+      ClientBackURL: buildFrontendRedirectUrl(safeReturnPath), // Back to shop button
+      Email: "",
+      LoginType: 0,
     };
 
-    // 3. Generate CheckMacValue
-    params.CheckMacValue = generateCheckMacValue(params);
+    // 3. Encrypt TradeInfo
+    const tradeInfoStr = new URLSearchParams(TradeInfoParams).toString();
+    const tradeInfoEnc = create_mpg_aes_encrypt(tradeInfoStr);
 
-    // 4. Return Data (Frontend will generate form and submit)
+    // 4. Encrypt TradeSha
+    const tradeShaEnc = create_mpg_sha_encrypt(tradeInfoEnc);
+
+    const params = {
+      MerchantID: NEWEBPAY_MERCHANT_ID,
+      TradeInfo: tradeInfoEnc,
+      TradeSha: tradeShaEnc,
+      Version: "2.0",
+    };
+
+    // 5. Return Data (Frontend will generate form and submit)
     return res.json({
       success: true,
       data: {
-        url: ECPAY_URL,
+        url: NEWEBPAY_URL,
         params,
       },
     });
@@ -116,46 +189,53 @@ export async function createTopupOrder(req, res) {
 }
 
 /**
- * Handle ECPay Payment Webhook
+ * Handle NewebPay Payment Webhook
  * POST /api/payments/webhook
  */
 export async function handleWebhook(req, res) {
   try {
     const data = req.body;
-    console.log("[ECPay Webhook] Received:", data);
+    console.log("[NewebPay Webhook] Received:", data);
 
-    // 1. Verify CheckMacValue to ensure authenticity
-    const receivedMac = data.CheckMacValue;
-    const calculatedMac = generateCheckMacValue(data);
-
-    if (receivedMac !== calculatedMac) {
-      console.error(
-        "[ECPay Webhook] CheckMacValue mismatch. Expected:",
-        calculatedMac,
-        "Got:",
-        receivedMac,
-      );
-      return res.status(400).send("0|Error"); // ECPay spec: reply 0|Error on failure
+    if (!data || !data.TradeInfo) {
+      return res.status(400).send("No TradeInfo found");
     }
 
+    // 1. Decrypt TradeInfo
+    let decryptedInfo;
+    try {
+        decryptedInfo = create_mpg_aes_decrypt(data.TradeInfo);
+    } catch (error) {
+        console.error("[NewebPay Webhook] Decrypt error:", error);
+        return res.status(400).send("Decrypt Error");
+    }
+
+    console.log("[NewebPay Webhook] Decrypted Info:", decryptedInfo);
+
     // 2. Process the Payment Status
-    if (data.RtnCode === "1") {
+    const result = decryptedInfo.Result || {};
+    const orderNo = result.MerchantOrderNo;
+
+    if (!orderNo) {
+        return res.status(400).send("No OrderNo in Result");
+    }
+
+    // Find the Order
+    const order = await prisma.order.findUnique({
+      where: { orderNo },
+    });
+
+    if (!order) {
+      console.error(`[NewebPay Webhook] Order ${orderNo} not found`);
+      return res.status(404).send("OrderNotFound");
+    }
+
+    if (decryptedInfo.Status === "SUCCESS") {
       // Payment Success
-      const orderNo = data.MerchantTradeNo;
-
-      // Find the Order
-      const order = await prisma.order.findUnique({
-        where: { orderNo },
-      });
-
-      if (!order) {
-        console.error(`[ECPay Webhook] Order ${orderNo} not found`);
-        return res.status(404).send("0|OrderNotFound");
-      }
 
       // Check if already processed
       if (order.status === "PAID") {
-        return res.send("1|OK");
+        return res.send("OK");
       }
 
       // 3. Update Order and Add Credits inside a Transaction
@@ -164,9 +244,9 @@ export async function handleWebhook(req, res) {
           where: { orderNo },
           data: {
             status: "PAID",
-            tradeNo: data.TradeNo,
-            paymentDate: new Date(data.PaymentDate),
-            paymentMethod: data.PaymentType,
+            tradeNo: result.TradeNo,
+            paymentDate: new Date(),
+            paymentMethod: result.PaymentType || "CREDIT",
           },
         }),
         prisma.workspace.update({
@@ -180,25 +260,42 @@ export async function handleWebhook(req, res) {
       ]);
 
       console.log(
-        `[ECPay Webhook] Order ${orderNo} paid. Added ${order.creditsAdded} credits to Workspace ${order.workspaceId}`,
+        `[NewebPay Webhook] Order ${orderNo} paid. Added ${order.creditsAdded} credits to Workspace ${order.workspaceId}`,
       );
     } else {
       // Payment Failed or other status
       console.log(
-        `[ECPay Webhook] Payment failed for ${data.MerchantTradeNo}. RtnCode: ${data.RtnCode}`,
+        `[NewebPay Webhook] Payment failed for ${orderNo}. Status: ${decryptedInfo.Status}, Message: ${decryptedInfo.Message}`,
       );
-      await prisma.order.update({
-        where: { orderNo: data.MerchantTradeNo },
-        data: {
-          status: "FAILED",
-        },
-      });
+      if (order.status !== "PAID") {
+          await prisma.order.update({
+            where: { orderNo },
+            data: {
+              status: "FAILED",
+            },
+          });
+      }
     }
 
-    // Reply 1|OK to acknowledge receipt to ECPay
-    return res.send("1|OK");
+    // Reply to acknowledge receipt
+    return res.send("OK");
   } catch (error) {
-    console.error("[ECPay Webhook] Error processing webhook:", error);
-    return res.status(500).send("0|InternalServerError");
+    console.error("[NewebPay Webhook] Error processing webhook:", error);
+    return res.status(500).send("InternalServerError");
   }
+}
+
+/**
+ * Handle NewebPay ReturnURL
+ * POST /api/payments/return
+ * 
+ * We use a backend redirect proxy here because NewebPay makes a POST request to ReturnURL.
+ * If NewebPay directly POSTs to the Next.js frontend, NextAuth's session cookie may be dropped 
+ * due to cross-site request rules (SameSite), which causes the user to be unauthenticated and 
+ * redirected to the login page. By POSTing to the backend first, we can do a 302 GET redirect 
+ * to the frontend, which is treated as a same-site navigation by the browser and preserves the cookie.
+ */
+export async function handleReturn(req, res) {
+  const redirectUrl = buildFrontendRedirectUrl(req.query.redirect);
+  res.redirect(302, redirectUrl);
 }
