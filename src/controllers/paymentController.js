@@ -9,6 +9,11 @@ const NEWEBPAY_URL =
   "https://ccore.newebpay.com/MPG/mpg_gateway"; // Use test environment by default
 
 const DEFAULT_RETURN_PATH = "/admin/settings?tab=billing";
+const TOP_UP_PLANS = {
+  starter: { amount: 499, creditsAdded: 500 },
+  pro: { amount: 999, creditsAdded: 1200 },
+  business: { amount: 2999, creditsAdded: 4000 },
+};
 
 function getOrigin(rawUrl) {
   if (!rawUrl) {
@@ -110,7 +115,7 @@ function create_mpg_aes_decrypt(TradeInfo) {
 export async function createTopupOrder(req, res) {
   try {
     const workspaceId = req.workspace?.id;
-    const { amount, creditsAdded, returnPath } = req.body;
+    const { planKey, amount, creditsAdded, returnPath } = req.body;
 
     if (!workspaceId) {
       return res.status(400).json({
@@ -119,10 +124,18 @@ export async function createTopupOrder(req, res) {
       });
     }
 
-    if (!amount || !creditsAdded) {
+    const requestedPlan = Object.hasOwn(TOP_UP_PLANS, planKey)
+      ? TOP_UP_PLANS[planKey]
+      : Object.values(TOP_UP_PLANS).find(
+          (plan) =>
+            plan.amount === parseInt(amount) &&
+            plan.creditsAdded === parseInt(creditsAdded),
+        );
+
+    if (!requestedPlan) {
       return res.status(400).json({
         success: false,
-        message: "Amount and creditsAdded are required",
+        message: "Invalid top-up plan",
       });
     }
 
@@ -132,8 +145,8 @@ export async function createTopupOrder(req, res) {
       data: {
         orderNo,
         workspaceId,
-        amount: parseInt(amount),
-        creditsAdded: parseInt(creditsAdded),
+        amount: requestedPlan.amount,
+        creditsAdded: requestedPlan.creditsAdded,
         status: "PENDING",
       },
     });
@@ -149,8 +162,8 @@ export async function createTopupOrder(req, res) {
       TimeStamp: Math.floor(Date.now() / 1000).toString(),
       Version: "2.0",
       MerchantOrderNo: orderNo,
-      Amt: parseInt(amount),
-      ItemDesc: `Pear AI Credits x ${creditsAdded}`,
+      Amt: requestedPlan.amount,
+      ItemDesc: `Pear AI Credits x ${requestedPlan.creditsAdded}`,
       ReturnURL: returnUrl.toString(), // Backend redirect proxy
       NotifyURL: WEBHOOK_URL, // Server webhook
       ClientBackURL: buildFrontendRedirectUrl(safeReturnPath), // Back to shop button
