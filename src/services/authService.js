@@ -4,11 +4,24 @@ import { signToken } from "../lib/jwt.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt"; // Keep for createUser if needed for tests, but mainly unused
 
+export const CURRENT_TERMS_VERSION = "2026-03-26";
+
 /**
  * Generate a random 6-digit numeric code
  */
 function generateOTP() {
   return crypto.randomInt(100000, 999999).toString();
+}
+
+function buildAuthUser(user, workspace) {
+  return {
+    id: user.id,
+    email: user.email,
+    workspaceId: workspace.id,
+    termsAcceptedAt: user.termsAcceptedAt,
+    termsVersionAccepted: user.termsVersionAccepted,
+    currentTermsVersion: CURRENT_TERMS_VERSION,
+  };
 }
 
 /**
@@ -72,11 +85,7 @@ export async function verifyPassword(email, password) {
 
   return {
     token,
-    user: {
-      id: user.id,
-      email: user.email,
-      workspaceId: workspace.id, // default active workspace
-    },
+    user: buildAuthUser(user, workspace),
   };
 }
 
@@ -133,6 +142,8 @@ export async function getUserById(userId) {
       id: true,
       email: true,
       phoneNumber: true,
+      termsAcceptedAt: true,
+      termsVersionAccepted: true,
       createdAt: true,
       workspaces: {
         include: {
@@ -146,7 +157,25 @@ export async function getUserById(userId) {
     throw new Error("User not found");
   }
 
-  return user;
+  return {
+    ...user,
+    currentTermsVersion: CURRENT_TERMS_VERSION,
+  };
+}
+
+/**
+ * Mark the current user as having accepted the current terms version.
+ */
+export async function acceptCurrentTerms(userId) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      termsAcceptedAt: new Date(),
+      termsVersionAccepted: CURRENT_TERMS_VERSION,
+    },
+  });
+
+  return getUserById(userId);
 }
 
 /**
@@ -176,10 +205,6 @@ export async function socialLogin(email) {
 
   return {
     token,
-    user: {
-      id: user.id,
-      email: user.email,
-      workspaceId: workspace.id, // default active workspace
-    },
+    user: buildAuthUser(user, workspace),
   };
 }

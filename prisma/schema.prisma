@@ -129,13 +129,15 @@ model SystemSettings {
 }
 
 model User {
-  id           String          @id @default(uuid())
-  email        String          @unique
-  passwordHash String?
-  otpCode      String?
-  otpExpiresAt DateTime?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  phoneNumber  String?         @unique
-  workspaces   WorkspaceUser[]
+  id                   String          @id @default(uuid())
+  email                String          @unique
+  passwordHash         String?
+  otpCode              String?
+  otpExpiresAt         DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  phoneNumber          String?         @unique
+  termsAcceptedAt      DateTime?
+  termsVersionAccepted String?
+  workspaces           WorkspaceUser[]
 }

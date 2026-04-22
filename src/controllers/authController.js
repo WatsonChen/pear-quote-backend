@@ -4,6 +4,7 @@ import {
   verifyPassword,
   getUserById,
   socialLogin,
+  acceptCurrentTerms,
 } from "../services/authService.js";
 
 /**
@@ -127,6 +128,37 @@ export async function handleGetMe(req, res) {
     return res.json(user);
   } catch (error) {
     console.error("Get me error:", error);
+
+    if (error.message === "User not found") {
+      return res.status(401).json({
+        success: false,
+        message: "User session invalid or user not found",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+/**
+ * Handle terms acceptance for current user
+ * POST /api/me/terms-acceptance
+ * Requires authMiddleware
+ */
+export async function handleAcceptTerms(req, res) {
+  try {
+    const { userId } = req.user;
+    const user = await acceptCurrentTerms(userId);
+
+    return res.json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("Accept terms error:", error);
 
     if (error.message === "User not found") {
       return res.status(401).json({

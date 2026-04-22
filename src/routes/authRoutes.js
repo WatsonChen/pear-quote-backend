@@ -5,6 +5,7 @@ import {
   handleSendCode,
   handleGetMe,
   handleSocialLogin,
+  handleAcceptTerms,
 } from "../controllers/authController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -17,5 +18,6 @@ router.post("/social-login", handleSocialLogin);
 
 // Protected routes (require authentication)
 router.get("/me", authMiddleware, handleGetMe);
+router.post("/me/terms-acceptance", authMiddleware, handleAcceptTerms);
 
 export default router;

@@ -30,6 +30,18 @@ components:
           type: string
           format: date-time
           description: Account creation timestamp
+        termsAcceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the user accepted the current legal terms
+        termsVersionAccepted:
+          type: string
+          nullable: true
+          description: Terms version accepted by the user
+        currentTermsVersion:
+          type: string
+          description: Current terms version required by the service
 
     Quote:
       type: object
@@ -290,6 +302,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /me/terms-acceptance:
+    post:
+      summary: Accept current terms and privacy policy
+      description: Persist that the authenticated user accepted the current terms version
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Terms accepted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: "#/components/schemas/User"
         "401":
           description: Unauthorized
           content:
