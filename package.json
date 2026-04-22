@@ -4,6 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "build": "prisma generate && prisma db push",
     "dev": "node --watch server.js",
     "start": "node server.js",
     "postinstall": "prisma generate",
