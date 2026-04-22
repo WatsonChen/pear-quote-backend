@@ -41,6 +41,35 @@ Every task MUST update:
 
 ## 4. Development Standards
 
+### 4.0 Local Environment
+
+- Use the Node version in `.nvmrc` before running backend commands.
+- Copy `.env.development.example` to `.env.development` before starting the backend locally.
+- Keep `.env.development` out of git. It contains machine-specific values and secrets.
+- The frontend local env should point to this backend with `NEXT_PUBLIC_BACKEND_URL=http://localhost:3001/api`.
+
+Minimum local backend values:
+
+```env
+PORT=3001
+FRONTEND_URL=http://localhost:3000
+DATABASE_URL=postgresql://postgres:password@localhost:5432/pear_quote
+JWT_SECRET=replace-with-local-jwt-secret
+```
+
+Local startup:
+
+```bash
+nvm use
+docker compose up -d postgres
+npx prisma db push
+yarn dev
+```
+
+If `.env.development` changes while the backend is already running, restart `yarn dev` so Node reads the new values.
+
+Frontend login uses NextAuth on `localhost:3000`, then the backend `POST /api/social-login` endpoint on `localhost:3001`.
+
 ### 4.1 Prisma
 
 - Schema changes -> `prisma migrate dev` (create migration file).
