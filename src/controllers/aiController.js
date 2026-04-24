@@ -362,6 +362,370 @@ function buildConfidenceGuidance({
   };
 }
 
+function normalizeGuidanceText(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function extractAiConfidenceGuidance(parsed, useChinese, confidenceLevel) {
+  const actionLimit = confidenceLevel === "medium" ? 2 : 3;
+  const minHintLength = useChinese ? 10 : 24;
+  const maxHintLength = useChinese ? 64 : 180;
+  const minActionLength = useChinese ? 8 : 18;
+  const maxActionLength = useChinese ? 46 : 120;
+
+  const rawHint = normalizeGuidanceText(parsed?.confidenceHint);
+  const confidenceHint =
+    rawHint && rawHint.length >= minHintLength && rawHint.length <= maxHintLength
+      ? rawHint
+      : null;
+
+  const candidateActions = Array.isArray(parsed?.confidenceActions)
+    ? parsed.confidenceActions
+    : [];
+  const confidenceActions = [];
+
+  for (const action of candidateActions) {
+    const normalizedAction = normalizeGuidanceText(action);
+    if (!normalizedAction) continue;
+    if (
+      normalizedAction.length < minActionLength ||
+      normalizedAction.length > maxActionLength
+    ) {
+      continue;
+    }
+    if (confidenceActions.includes(normalizedAction)) continue;
+    confidenceActions.push(normalizedAction);
+    if (confidenceActions.length >= actionLimit) break;
+  }
+
+  return {
+    confidenceHint,
+    confidenceActions,
+  };
+}
+
+function mergeConfidenceGuidance(ruleGuidance, aiGuidance) {
+  if (ruleGuidance.confidenceLevel === "high") {
+    return {
+      confidenceLevel: "high",
+      confidenceHint: null,
+      confidenceActions: [],
+    };
+  }
+
+  const actionLimit = ruleGuidance.confidenceLevel === "medium" ? 2 : 3;
+
+  return {
+    confidenceLevel: ruleGuidance.confidenceLevel,
+    confidenceHint: aiGuidance.confidenceHint ?? ruleGuidance.confidenceHint,
+    confidenceActions:
+      aiGuidance.confidenceActions.length > 0
+        ? aiGuidance.confidenceActions.slice(0, actionLimit)
+        : ruleGuidance.confidenceActions.slice(0, actionLimit),
+  };
+}
+
+function formatRange(minValue, maxValue, useChinese) {
+  const roundedMin = Math.round(minValue);
+  const roundedMax = Math.round(maxValue);
+  if (useChinese) {
+    return `NT$${roundedMin.toLocaleString()} - NT$${roundedMax.toLocaleString()}`;
+  }
+  return `$${roundedMin.toLocaleString()} - $${roundedMax.toLocaleString()}`;
+}
+
+function estimateFallbackComplexity(description, hasImage) {
+  const normalized = (description || "").toLowerCase();
+  let complexity = 1;
+  const length = description.length;
+
+  if (length >= 260) complexity += 0.95;
+  else if (length >= 160) complexity += 0.7;
+  else if (length >= 90) complexity += 0.45;
+  else if (length >= 45) complexity += 0.2;
+
+  const heavySignals = [
+    "金流",
+    "payment",
+    "logistics",
+    "物流",
+    "crm",
+    "dashboard",
+    "後台",
+    "erp",
+    "api",
+    "integration",
+    "雙端",
+    "ios",
+    "android",
+    "mobile",
+  ];
+  const heavyHitCount = heavySignals.filter((signal) =>
+    normalized.includes(signal),
+  ).length;
+  complexity += Math.min(heavyHitCount * 0.18, 1.2);
+
+  if (hasImage) complexity += 0.22;
+
+  return clampNumber(complexity, 0.9, 3.2);
+}
+
+function buildFallbackBreakdown(description, useChinese) {
+  const normalized = (description || "").toLowerCase();
+  const contains = (keywords) =>
+    keywords.some((keyword) => normalized.includes(keyword));
+
+  const items = [];
+  if (useChinese) {
+    items.push({
+      label: "需求釐清",
+      description: "整理核心流程、功能邊界與主要交付項目。",
+      effort: "12-20h",
+    });
+  } else {
+    items.push({
+      label: "Scope alignment",
+      description: "Clarify core flows, feature boundaries, and deliverables.",
+      effort: "10-16h",
+    });
+  }
+
+  if (contains(["web", "網站", "frontend", "前端", "ui", "ux"])) {
+    items.push(
+      useChinese
+        ? {
+            label: "前台體驗實作",
+            description: "完成主要頁面與關鍵互動流程的前端建置。",
+            effort: "28-48h",
+          }
+        : {
+            label: "Frontend build",
+            description: "Implement key pages and interaction flows.",
+            effort: "24-40h",
+          },
+    );
+  }
+
+  if (contains(["後台", "dashboard", "admin", "crm", "管理"])) {
+    items.push(
+      useChinese
+        ? {
+            label: "後台與資料流程",
+            description: "建立管理端頁面、資料操作與權限基礎邏輯。",
+            effort: "24-44h",
+          }
+        : {
+            label: "Admin and data flow",
+            description: "Build admin views, data operations, and base access logic.",
+            effort: "22-40h",
+          },
+    );
+  }
+
+  if (contains(["payment", "金流", "物流", "logistics", "api", "integration"])) {
+    items.push(
+      useChinese
+        ? {
+            label: "第三方串接",
+            description: "處理金流、物流或外部系統 API 串接與驗證。",
+            effort: "20-36h",
+          }
+        : {
+            label: "Integrations",
+            description: "Connect payment/logistics or external APIs with validation.",
+            effort: "18-34h",
+          },
+    );
+  }
+
+  if (items.length < 3) {
+    items.push(
+      useChinese
+        ? {
+            label: "功能主體開發",
+            description: "完成核心商業流程與必要資料結構。",
+            effort: "30-52h",
+          }
+        : {
+            label: "Core feature build",
+            description: "Implement core business flows and required data model.",
+            effort: "26-46h",
+          },
+    );
+  }
+
+  items.push(
+    useChinese
+      ? {
+          label: "測試與上線",
+          description: "整合測試、修正風險並完成部署交付。",
+          effort: "12-22h",
+        }
+      : {
+          label: "QA and launch",
+          description: "Run integration QA, fix blockers, and deploy.",
+          effort: "10-18h",
+        },
+  );
+
+  return items.slice(0, 5);
+}
+
+function buildFallbackAssumptions(description, hasImage, useChinese) {
+  const normalized = (description || "").toLowerCase();
+  const assumptions = [];
+  const push = (zhText, enText) => {
+    if (assumptions.length >= 3) return;
+    assumptions.push(useChinese ? zhText : enText);
+  };
+
+  if (!/timeline|deadline|時程|交期|week|month|預算|budget/.test(normalized)) {
+    push(
+      "此估算以一般中小型專案時程推算，正式交期需再確認。",
+      "Timeline is estimated for a typical small-to-mid project and should be validated.",
+    );
+  }
+
+  if (!/payment|金流|api|integration|第三方|串接/.test(normalized)) {
+    push(
+      "目前以標準第三方服務串接複雜度估算，不含高度客製協定。",
+      "Estimate assumes standard third-party integrations, not highly custom protocols.",
+    );
+  }
+
+  if (!hasImage) {
+    push(
+      "若補上流程截圖或規格文件，價格與時程區間可再縮小。",
+      "Adding screenshots or spec docs can narrow the estimate range.",
+    );
+  }
+
+  push(
+    "超出目前敘述的新功能會影響最終報價與時程。",
+    "New requirements beyond the current brief will affect final scope and pricing.",
+  );
+  push(
+    "此結果用於初步溝通，正式報價建議再做一次需求確認。",
+    "This preview is for first-pass discussion; final quote should follow a short discovery pass.",
+  );
+
+  return assumptions.slice(0, 3);
+}
+
+function buildRateLimitFallbackEstimate({
+  description,
+  hasImage,
+  useChinese,
+  retryAfterSeconds,
+}) {
+  const complexity = estimateFallbackComplexity(description, hasImage);
+  const breakdown = buildFallbackBreakdown(description, useChinese);
+  const assumptions = buildFallbackAssumptions(description, hasImage, useChinese);
+
+  let minPrice = useChinese ? 62_000 : 2_800;
+  let maxPrice = useChinese ? 108_000 : 5_200;
+  minPrice += (complexity - 1) * (useChinese ? 95_000 : 3_400);
+  maxPrice += (complexity - 1) * (useChinese ? 145_000 : 5_100);
+
+  const timelineMin = clampNumber(
+    Math.round(2 + complexity * 1.8),
+    2,
+    useChinese ? 18 : 20,
+  );
+  const timelineMax = clampNumber(
+    timelineMin + Math.round(1 + complexity * 1.4),
+    timelineMin + 1,
+    useChinese ? 24 : 26,
+  );
+
+  return {
+    priceRange: formatRange(minPrice, maxPrice, useChinese),
+    timeline: useChinese
+      ? `${timelineMin}-${timelineMax} 週`
+      : `${timelineMin}-${timelineMax} weeks`,
+    confidence: useChinese ? "初步估計信心度 68%" : "Draft confidence 68%",
+    breakdown,
+    assumptions,
+    note: useChinese
+      ? `AI 目前請求量較高，先提供系統粗估結果；約 ${retryAfterSeconds} 秒後可再試一次模型版分析。`
+      : `AI is currently busy, so this is a system fallback estimate. Retry in about ${retryAfterSeconds}s for a full model-based result.`,
+  };
+}
+
+function finalizeRoughEstimateResult({
+  parsed,
+  description,
+  hasImage,
+  useChinese,
+  allowAiGuidance,
+}) {
+  const modelConfidence = extractConfidenceScore(
+    parsed?.confidenceScore ?? parsed?.confidence,
+  );
+  const heuristicConfidence = estimateHeuristicConfidence({
+    description,
+    hasImage,
+    breakdownCount: Array.isArray(parsed?.breakdown) ? parsed.breakdown.length : 0,
+    assumptionsCount: Array.isArray(parsed?.assumptions)
+      ? parsed.assumptions.length
+      : 0,
+  });
+
+  const finalConfidenceScore =
+    modelConfidence == null
+      ? heuristicConfidence
+      : (() => {
+          const modelWeight = description.length >= 120 || hasImage ? 0.65 : 0.55;
+          const heuristicWeight = 1 - modelWeight;
+          return clampNumber(
+            Math.round(
+              modelConfidence * modelWeight + heuristicConfidence * heuristicWeight,
+            ),
+            CONFIDENCE_SCORE_MIN,
+            CONFIDENCE_SCORE_MAX,
+          );
+        })();
+
+  const finalized = { ...parsed };
+  finalized.confidence = formatConfidence(
+    finalConfidenceScore,
+    description,
+    parsed?.confidence,
+  );
+
+  const ruleGuidance = buildConfidenceGuidance({
+    score: finalConfidenceScore,
+    description,
+    hasImage,
+    useChinese,
+  });
+  const aiGuidance = allowAiGuidance
+    ? extractAiConfidenceGuidance(
+        parsed,
+        useChinese,
+        ruleGuidance.confidenceLevel,
+      )
+    : { confidenceHint: null, confidenceActions: [] };
+  const guidance = mergeConfidenceGuidance(ruleGuidance, aiGuidance);
+
+  finalized.confidenceScore = finalConfidenceScore;
+  finalized.confidenceLevel = guidance.confidenceLevel;
+  if (guidance.confidenceHint) {
+    finalized.confidenceHint = guidance.confidenceHint;
+  } else {
+    delete finalized.confidenceHint;
+  }
+  if (guidance.confidenceActions.length > 0) {
+    finalized.confidenceActions = guidance.confidenceActions;
+  } else {
+    delete finalized.confidenceActions;
+  }
+
+  return finalized;
+}
+
 /**
  * Analyze requirements using AI
  * POST /api/ai/analyze
@@ -610,13 +974,25 @@ export async function roughEstimate(req, res) {
       const retryAfterSeconds = Math.ceil(
         (roughEstimateCooldownUntil - now) / 1000,
       );
-      res.set("Retry-After", String(retryAfterSeconds));
-      return res.status(429).json({
-        success: false,
-        message: getBusyMessage(useChinese, retryAfterSeconds),
-        errorCode: "AI_RATE_LIMIT",
+      const fallbackResult = buildRateLimitFallbackEstimate({
+        description: normalizedDescription,
+        hasImage,
+        useChinese,
         retryAfterSeconds,
-        apiKeyPresent: true,
+      });
+      const finalizedFallback = finalizeRoughEstimateResult({
+        parsed: fallbackResult,
+        description: normalizedDescription,
+        hasImage,
+        useChinese,
+        allowAiGuidance: false,
+      });
+
+      return res.json({
+        ...finalizedFallback,
+        fallback: true,
+        fallbackReason: "rate_limited",
+        retryAfterSeconds,
       });
     }
 
@@ -630,6 +1006,8 @@ Schema:
   "timeline": "string (e.g. '4 – 6 weeks')",
   "confidenceScore": "number (integer 55-92)",
   "confidence": "string (must include confidenceScore as percentage, e.g. 'Draft confidence 82%')",
+  "confidenceHint": "string | null (one short sentence; null when confidence is high)",
+  "confidenceActions": ["string", "string", "string"],
   "breakdown": [
     {
       "label": "string (phase name, max 5 words)",
@@ -651,6 +1029,11 @@ Rules:
 - increase confidenceScore when scope is specific (clear features, constraints, stack, deliverables).
 - decrease confidenceScore when scope is vague, highly complex, or missing key constraints.
 - do not reuse the same confidence score across unrelated inputs unless the information quality is genuinely similar.
+- confidenceHint must be concise and practical.
+- confidenceActions must be concrete next inputs the user can add, not generic advice.
+- if confidenceScore >= 82: set confidenceHint to null and confidenceActions to [].
+- if confidenceScore is 72-81: provide confidenceHint + up to 2 confidenceActions.
+- if confidenceScore <= 71: provide confidenceHint + up to 3 confidenceActions.
 
 Project description:
 ${normalizedDescription || "(see attached images)"}
@@ -670,13 +1053,25 @@ ${normalizedDescription || "(see attached images)"}
       if (statusCode === 429) {
         const retryAfterSeconds = Math.ceil(ROUGH_ESTIMATE_COOLDOWN_MS / 1000);
         roughEstimateCooldownUntil = Date.now() + ROUGH_ESTIMATE_COOLDOWN_MS;
-        res.set("Retry-After", String(retryAfterSeconds));
-        return res.status(429).json({
-          success: false,
-          message: getBusyMessage(useChinese, retryAfterSeconds),
-          errorCode: "AI_RATE_LIMIT",
+        const fallbackResult = buildRateLimitFallbackEstimate({
+          description: normalizedDescription,
+          hasImage,
+          useChinese,
           retryAfterSeconds,
-          apiKeyPresent: true,
+        });
+        const finalizedFallback = finalizeRoughEstimateResult({
+          parsed: fallbackResult,
+          description: normalizedDescription,
+          hasImage,
+          useChinese,
+          allowAiGuidance: false,
+        });
+
+        return res.json({
+          ...finalizedFallback,
+          fallback: true,
+          fallbackReason: "rate_limited",
+          retryAfterSeconds,
         });
       }
 
@@ -706,61 +1101,15 @@ ${normalizedDescription || "(see attached images)"}
       });
     }
 
-    const modelConfidence = extractConfidenceScore(
-      parsed?.confidenceScore ?? parsed?.confidence,
-    );
-    const heuristicConfidence = estimateHeuristicConfidence({
-      description: normalizedDescription,
-      hasImage,
-      breakdownCount: Array.isArray(parsed?.breakdown) ? parsed.breakdown.length : 0,
-      assumptionsCount: Array.isArray(parsed?.assumptions)
-        ? parsed.assumptions.length
-        : 0,
-    });
-
-    const finalConfidenceScore =
-      modelConfidence == null
-        ? heuristicConfidence
-        : (() => {
-            const modelWeight =
-              normalizedDescription.length >= 120 || hasImage ? 0.65 : 0.55;
-            const heuristicWeight = 1 - modelWeight;
-            return clampNumber(
-              Math.round(
-                modelConfidence * modelWeight +
-                  heuristicConfidence * heuristicWeight,
-              ),
-              CONFIDENCE_SCORE_MIN,
-              CONFIDENCE_SCORE_MAX,
-            );
-          })();
-
-    parsed.confidence = formatConfidence(
-      finalConfidenceScore,
-      normalizedDescription,
-      parsed?.confidence,
-    );
-    const guidance = buildConfidenceGuidance({
-      score: finalConfidenceScore,
+    const finalizedResult = finalizeRoughEstimateResult({
+      parsed,
       description: normalizedDescription,
       hasImage,
       useChinese,
+      allowAiGuidance: true,
     });
 
-    parsed.confidenceScore = finalConfidenceScore;
-    parsed.confidenceLevel = guidance.confidenceLevel;
-    if (guidance.confidenceHint) {
-      parsed.confidenceHint = guidance.confidenceHint;
-    } else {
-      delete parsed.confidenceHint;
-    }
-    if (guidance.confidenceActions.length > 0) {
-      parsed.confidenceActions = guidance.confidenceActions;
-    } else {
-      delete parsed.confidenceActions;
-    }
-
-    return res.json(parsed);
+    return res.json(finalizedResult);
   } catch (error) {
     console.error("roughEstimate error:", error);
     return res.status(500).json({
