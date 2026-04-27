@@ -1,58 +1,108 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import prisma from "../lib/prisma.js";
+import {
+  extractGeminiRetryAfterSeconds,
+  extractGeminiStatusCode,
+  generateGeminiJsonText,
+  getGeminiClient,
+  getGeminiModelName,
+  hasGeminiApiKey,
+  isGeminiTemporaryStatus as isGeminiRetryableStatus,
+  normalizeJsonResponse,
+} from "../lib/gemini.js";
 
-const GEMINI_MODEL_NAME = "gemini-2.0-flash";
-const GEMINI_RETRY_DELAYS_MS = [450, 900];
-const ROUGH_ESTIMATE_COOLDOWN_MS = 20_000;
+const DEFAULT_AI_RETRY_AFTER_SECONDS = 20;
 const CONFIDENCE_SCORE_MIN = 62;
 const CONFIDENCE_SCORE_MAX = 92;
+const ROUGH_ESTIMATE_MAX_DESCRIPTION_CHARS = readPositiveIntEnv(
+  "ROUGH_ESTIMATE_MAX_DESCRIPTION_CHARS",
+  1400,
+);
+const ROUGH_ESTIMATE_DAILY_LIMIT = readPositiveIntEnv(
+  "ROUGH_ESTIMATE_DAILY_LIMIT",
+  0,
+);
+const ROUGH_ESTIMATE_QUEUE_WAIT_MS = readPositiveIntEnv(
+  "ROUGH_ESTIMATE_QUEUE_WAIT_MS",
+  4_500,
+);
+const ANALYZE_QUEUE_WAIT_MS = readPositiveIntEnv(
+  "ANALYZE_QUEUE_WAIT_MS",
+  12_000,
+);
+const roughEstimateUsageByWindow = new Map();
 
-let roughEstimateCooldownUntil = 0;
+function readPositiveIntEnv(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
 
-function hasGeminiApiKey() {
-  return Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-function getGeminiClient() {
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
-  if (!apiKey) {
-    return null;
+function getCurrentUsageWindowKey(now = Date.now()) {
+  return Math.floor(now / 86_400_000);
+}
+
+function getSecondsUntilNextUsageWindow(now = Date.now()) {
+  const nextWindowAt = (getCurrentUsageWindowKey(now) + 1) * 86_400_000;
+  return Math.max(1, Math.ceil((nextWindowAt - now) / 1000));
+}
+
+function getClientFingerprint(req) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim().length > 0) {
+    return forwardedFor.split(",")[0].trim();
   }
 
-  return new GoogleGenerativeAI(apiKey);
+  return req.ip || req.socket?.remoteAddress || "anonymous";
 }
 
-function normalizeJsonResponse(text) {
-  return text.replace(/```json\n?|```/g, "").trim();
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function extractGeminiStatusCode(error) {
-  const directStatus =
-    error?.status ?? error?.statusCode ?? error?.response?.status ?? null;
-  if (typeof directStatus === "number" && Number.isFinite(directStatus)) {
-    return directStatus;
+function createRoughEstimateQuota(req) {
+  if (ROUGH_ESTIMATE_DAILY_LIMIT <= 0) {
+    return { allowed: true, commit() {} };
   }
 
-  const message = typeof error?.message === "string" ? error.message : "";
-  const bracketMatch = message.match(/\[(\d{3})[^\]]*\]/);
-  if (bracketMatch) {
-    return Number.parseInt(bracketMatch[1], 10);
+  const now = Date.now();
+  const windowKey = String(getCurrentUsageWindowKey(now));
+  for (const key of roughEstimateUsageByWindow.keys()) {
+    if (!key.startsWith(`${windowKey}:`)) {
+      roughEstimateUsageByWindow.delete(key);
+    }
   }
 
-  const plainMatch = message.match(/\b(429|500|502|503|504)\b/);
-  if (plainMatch) {
-    return Number.parseInt(plainMatch[1], 10);
-  }
+  const fingerprint = getClientFingerprint(req);
+  const quotaKey = `${windowKey}:${fingerprint}`;
+  const usedCount = roughEstimateUsageByWindow.get(quotaKey) ?? 0;
+  let committed = false;
 
-  return null;
+  return {
+    allowed: usedCount < ROUGH_ESTIMATE_DAILY_LIMIT,
+    retryAfterSeconds: getSecondsUntilNextUsageWindow(now),
+    commit() {
+      if (committed || usedCount >= ROUGH_ESTIMATE_DAILY_LIMIT) {
+        return;
+      }
+
+      roughEstimateUsageByWindow.set(quotaKey, usedCount + 1);
+      committed = true;
+    },
+  };
 }
 
-function isGeminiRetryableStatus(statusCode) {
-  return statusCode === 429 || statusCode === 500 || statusCode === 502 || statusCode === 503 || statusCode === 504;
+function getDailyLimitMessage(useChinese, retryAfterSeconds) {
+  if (useChinese) {
+    return `今日免費試用次數已用完，約 ${retryAfterSeconds} 秒後會重置。`;
+  }
+
+  return `Today's free trial limit has been reached. It resets in about ${retryAfterSeconds} seconds.`;
+}
+
+function getDescriptionTooLongMessage(useChinese, maxChars) {
+  if (useChinese) {
+    return `描述內容過長，請精簡至 ${maxChars} 字內，或改用正式需求分析流程。`;
+  }
+
+  return `The description is too long. Please shorten it to ${maxChars} characters or move to the full analysis flow.`;
 }
 
 function getBusyMessage(useChinese, retryAfterSeconds) {
@@ -69,36 +119,6 @@ function getUnavailableMessage(useChinese) {
   }
 
   return "AI service is temporarily unavailable. Please try again shortly.";
-}
-
-async function generateGeminiJsonText(geminiClient, parts) {
-  const model = geminiClient.getGenerativeModel({
-    model: GEMINI_MODEL_NAME,
-    generationConfig: { responseMimeType: "application/json" },
-  });
-
-  let lastError = null;
-  const totalAttempts = GEMINI_RETRY_DELAYS_MS.length + 1;
-
-  for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
-    try {
-      const result = await model.generateContent(parts);
-      return result.response.text();
-    } catch (error) {
-      lastError = error;
-      const statusCode = extractGeminiStatusCode(error);
-
-      if (!isGeminiRetryableStatus(statusCode) || attempt === totalAttempts) {
-        throw error;
-      }
-
-      const delay =
-        GEMINI_RETRY_DELAYS_MS[attempt - 1] + Math.floor(Math.random() * 120);
-      await sleep(delay);
-    }
-  }
-
-  throw lastError;
 }
 
 function clampNumber(value, min, max) {
@@ -733,6 +753,9 @@ function finalizeRoughEstimateResult({
 export async function analyzeRequirements(req, res) {
   try {
     const { requirements, images } = req.body;
+    const normalizedRequirements =
+      typeof requirements === "string" ? requirements.trim() : "";
+    const safeImages = Array.isArray(images) ? images : [];
     const workspaceId = req.workspace?.id;
     const creditCost = 10;
 
@@ -773,7 +796,7 @@ export async function analyzeRequirements(req, res) {
     }
 
     // Allow empty requirements if images are provided
-    if (!requirements && (!images || images.length === 0)) {
+    if (!normalizedRequirements && safeImages.length === 0) {
       return res
         .status(400)
         .json({ message: "Requirements text or images are required" });
@@ -788,6 +811,7 @@ export async function analyzeRequirements(req, res) {
       });
     }
 
+    const modelName = getGeminiModelName("analyze");
     const prompt = `
 Please analyze these software requirements and break them down into actionable tasks. 
 Return the result EXCLUSIVELY as a valid JSON object.
@@ -815,16 +839,14 @@ JSON Structure:
 }
 
 Requirements:
-${requirements}
+${normalizedRequirements}
 `;
 
     console.log("Calling Gemini AI via official SDK with payload:", {
-      requirementsLength: requirements.length,
-      imagesCount: images?.length || 0,
+      modelName,
+      requirementsLength: normalizedRequirements.length,
+      imagesCount: safeImages.length,
     });
-
-    // Safety check for images
-    const safeImages = Array.isArray(images) ? images : [];
 
     const parts = [{ text: prompt }];
 
@@ -844,12 +866,18 @@ ${requirements}
 
     let text;
     try {
-      text = await generateGeminiJsonText(geminiClient, parts);
+      text = await generateGeminiJsonText(geminiClient, parts, {
+        modelName,
+        maxQueueWaitMs: ANALYZE_QUEUE_WAIT_MS,
+      });
     } catch (error) {
       const statusCode = extractGeminiStatusCode(error);
+      const retryAfterSeconds = extractGeminiRetryAfterSeconds(
+        error,
+        DEFAULT_AI_RETRY_AFTER_SECONDS,
+      );
 
       if (statusCode === 429) {
-        const retryAfterSeconds = Math.ceil(ROUGH_ESTIMATE_COOLDOWN_MS / 1000);
         res.set("Retry-After", String(retryAfterSeconds));
         return res.status(429).json({
           success: false,
@@ -952,11 +980,34 @@ export async function roughEstimate(req, res) {
 
     const hasImage = normalizedImageBase64List.length > 0;
     const useChinese = hasChineseText(normalizedDescription);
+    const quota = createRoughEstimateQuota(req);
 
     if (!normalizedDescription && !hasImage) {
       return res.status(400).json({
         success: false,
         message: "description or imageBase64/imageBase64List required",
+      });
+    }
+
+    if (normalizedDescription.length > ROUGH_ESTIMATE_MAX_DESCRIPTION_CHARS) {
+      return res.status(413).json({
+        success: false,
+        message: getDescriptionTooLongMessage(
+          useChinese,
+          ROUGH_ESTIMATE_MAX_DESCRIPTION_CHARS,
+        ),
+        errorCode: "DESCRIPTION_TOO_LONG",
+        maxChars: ROUGH_ESTIMATE_MAX_DESCRIPTION_CHARS,
+      });
+    }
+
+    if (!quota.allowed) {
+      res.set("Retry-After", String(quota.retryAfterSeconds));
+      return res.status(429).json({
+        success: false,
+        message: getDailyLimitMessage(useChinese, quota.retryAfterSeconds),
+        errorCode: "ROUGH_ESTIMATE_DAILY_LIMIT",
+        retryAfterSeconds: quota.retryAfterSeconds,
       });
     }
 
@@ -968,33 +1019,15 @@ export async function roughEstimate(req, res) {
         apiKeyPresent: false,
       });
     }
-
-    const now = Date.now();
-    if (roughEstimateCooldownUntil > now) {
-      const retryAfterSeconds = Math.ceil(
-        (roughEstimateCooldownUntil - now) / 1000,
-      );
-      const fallbackResult = buildRateLimitFallbackEstimate({
-        description: normalizedDescription,
-        hasImage,
-        useChinese,
-        retryAfterSeconds,
-      });
-      const finalizedFallback = finalizeRoughEstimateResult({
-        parsed: fallbackResult,
-        description: normalizedDescription,
-        hasImage,
-        useChinese,
-        allowAiGuidance: false,
-      });
-
-      return res.json({
-        ...finalizedFallback,
-        fallback: true,
-        fallbackReason: "rate_limited",
-        retryAfterSeconds,
-      });
-    }
+    const modelName = getGeminiModelName("roughEstimate");
+    const fallbackModelNames = Array.from(
+      new Set(
+        [
+          process.env.GEMINI_ROUGH_ESTIMATE_FALLBACK_MODEL?.trim(),
+          getGeminiModelName("default"),
+        ].filter((value) => value && value !== modelName),
+      ),
+    );
 
     const prompt = `
 You are a senior software project estimator. Analyze the following project description and produce a rough quote preview.
@@ -1047,12 +1080,18 @@ ${normalizedDescription || "(see attached images)"}
 
     let text;
     try {
-      text = await generateGeminiJsonText(geminiClient, parts);
+      text = await generateGeminiJsonText(geminiClient, parts, {
+        modelName,
+        fallbackModelNames,
+        maxQueueWaitMs: ROUGH_ESTIMATE_QUEUE_WAIT_MS,
+      });
     } catch (error) {
       const statusCode = extractGeminiStatusCode(error);
       if (statusCode === 429) {
-        const retryAfterSeconds = Math.ceil(ROUGH_ESTIMATE_COOLDOWN_MS / 1000);
-        roughEstimateCooldownUntil = Date.now() + ROUGH_ESTIMATE_COOLDOWN_MS;
+        const retryAfterSeconds = extractGeminiRetryAfterSeconds(
+          error,
+          DEFAULT_AI_RETRY_AFTER_SECONDS,
+        );
         const fallbackResult = buildRateLimitFallbackEstimate({
           description: normalizedDescription,
           hasImage,
@@ -1066,11 +1105,13 @@ ${normalizedDescription || "(see attached images)"}
           useChinese,
           allowAiGuidance: false,
         });
+        quota.commit();
 
         return res.json({
           ...finalizedFallback,
           fallback: true,
-          fallbackReason: "rate_limited",
+          fallbackReason:
+            error?.errorCode === "AI_QUEUE_BUSY" ? "queue_busy" : "rate_limited",
           retryAfterSeconds,
         });
       }
@@ -1109,6 +1150,7 @@ ${normalizedDescription || "(see attached images)"}
       allowAiGuidance: true,
     });
 
+    quota.commit();
     return res.json(finalizedResult);
   } catch (error) {
     console.error("roughEstimate error:", error);
