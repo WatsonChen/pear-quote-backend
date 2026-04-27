@@ -1,14 +1,7 @@
 import prisma from "../lib/prisma.js";
-import {
-  extractGeminiRetryAfterSeconds,
-  extractGeminiStatusCode,
-  generateGeminiText,
-  getGeminiClient,
-  getGeminiModelName,
-  hasGeminiApiKey,
-} from "../lib/gemini.js";
-
-const ANALYTICS_INSIGHT_QUEUE_WAIT_MS = 8_000;
+import { generateText } from "ai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const getAnalyticsMetrics = async (req, res) => {
   const workspaceId = req.workspace?.id;
@@ -235,27 +228,12 @@ export const getAnalyticsProjects = async (req, res) => {
   }
 };
 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+
 export const postAnalyticsInsight = async (req, res) => {
   const workspaceId = req.workspace?.id;
-  const creditCost = 10;
 
   try {
-    if (!workspaceId) {
-      return res.status(401).json({
-        success: false,
-        message: "Workspace not found",
-      });
-    }
-
-    if (req.isFallbackWorkspace) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Unable to verify current workspace ID. Please select a workspace.",
-        errorCode: "WORKSPACE_ID_MISSING",
-      });
-    }
-
     // 1. Fetch data for the prompt
     const [quotes, projects] = await Promise.all([
       prisma.quote.findMany({
@@ -283,23 +261,29 @@ export const postAnalyticsInsight = async (req, res) => {
       });
     }
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { creditBalance: true },
+    // 1.5 Deduct Credits (10 credits for AI insight)
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        workspaces: {
+          where: { workspaceId },
+        },
+      },
     });
 
-    if (!workspace) {
-      return res.status(404).json({
-        success: false,
-        message: "Workspace does not exist",
-      });
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
     }
 
-    if (workspace.creditBalance < creditCost) {
+    const hasCredits = await checkAndDeductCredits(
+      req.user.id,
+      10,
+      "GENERATE_INSIGHT",
+    );
+    if (!hasCredits) {
       return res.status(403).json({
-        success: false,
-        message: "Insufficient credits. Please top up your account.",
-        errorCode: "INSUFFICIENT_CREDITS",
+        message: "Insufficient credits",
+        error: "INSUFFICIENT_CREDITS",
       });
     }
 
@@ -333,6 +317,9 @@ export const postAnalyticsInsight = async (req, res) => {
       .join(", ")}
 `;
 
+    // 3. Call Gemini via official SDK
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
     const prompt = `
 你是一位專業的業務分析顧問。請根據以下用戶的報價數據，提供一段簡短、具備洞察力且具備行動建議的「AI 洞察」（約 60-100 字）。
 語氣要專業、正面且具備商業價值。
@@ -342,38 +329,9 @@ ${dataSummary}
 請直接輸出洞察文本，不需要標題或其他格式。
 `;
 
-    const geminiClient = getGeminiClient();
-    if (!geminiClient) {
-      return res.status(500).json({
-        success: false,
-        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
-        apiKeyPresent: hasGeminiApiKey(),
-      });
-    }
-
-    const modelName = getGeminiModelName("analyticsInsight");
-    let text;
-
-    try {
-      text = await generateGeminiText(geminiClient, prompt, {
-        modelName,
-        maxQueueWaitMs: ANALYTICS_INSIGHT_QUEUE_WAIT_MS,
-      });
-    } catch (error) {
-      const statusCode = extractGeminiStatusCode(error);
-      if (statusCode === 429) {
-        const retryAfterSeconds = extractGeminiRetryAfterSeconds(error, 20);
-        res.set("Retry-After", String(retryAfterSeconds));
-        return res.status(429).json({
-          success: false,
-          message: `AI 洞察目前請求量較高，請約 ${retryAfterSeconds} 秒後再試。`,
-          errorCode: "AI_RATE_LIMIT",
-          retryAfterSeconds,
-        });
-      }
-
-      throw error;
-    }
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
     // 4. Deduct credits after successful AI generation
     await prisma.workspace.update({
@@ -392,10 +350,6 @@ ${dataSummary}
     console.error("Failed to generate AI insight:", error);
     res
       .status(500)
-      .json({
-        success: false,
-        message: "Failed to generate AI insight",
-        error: error.message,
-      });
+      .json({ message: "Failed to generate AI insight", error: error.message });
   }
 };
