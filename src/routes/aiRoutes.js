@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { analyzeRequirements, roughEstimate } from "../controllers/aiController.js";
+import {
+  analyzeRequirements,
+  refineQuote,
+  roughEstimate,
+  translateQuote,
+} from "../controllers/aiController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
@@ -11,5 +16,7 @@ router.post("/rough-estimate", roughEstimate);
 router.use(authMiddleware);
 
 router.post("/analyze", analyzeRequirements);
+router.post("/translate-quote", translateQuote);
+router.post("/refine-quote", refineQuote);
 
 export default router;

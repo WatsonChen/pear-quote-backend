@@ -29,6 +29,14 @@ const ANALYZE_QUEUE_WAIT_MS = readPositiveIntEnv(
   "ANALYZE_QUEUE_WAIT_MS",
   12_000,
 );
+const TRANSLATE_QUEUE_WAIT_MS = readPositiveIntEnv(
+  "TRANSLATE_QUEUE_WAIT_MS",
+  12_000,
+);
+const REFINE_QUEUE_WAIT_MS = readPositiveIntEnv(
+  "REFINE_QUEUE_WAIT_MS",
+  12_000,
+);
 const roughEstimateUsageByWindow = new Map();
 
 function readPositiveIntEnv(name, fallback) {
@@ -746,15 +754,581 @@ function finalizeRoughEstimateResult({
   return finalized;
 }
 
+function normalizeTextField(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function parseAiJsonPayload(text, label = "AI response") {
+  const cleanedText = normalizeJsonResponse(text);
+
+  try {
+    return JSON.parse(cleanedText);
+  } catch (error) {
+    throw new Error(`Failed to parse ${label} as JSON: ${error.message}`);
+  }
+}
+
+function buildTranslatedItemCopies(sourceItems, translatedItems) {
+  const translatedItemMap = new Map(
+    Array.isArray(translatedItems)
+      ? translatedItems.map((item) => [item?.id, normalizeTextField(item?.description)])
+      : [],
+  );
+
+  return sourceItems.map((item) => ({
+    description: translatedItemMap.get(item.id) || item.description,
+    type: item.type || "service",
+    estimatedHours: item.estimatedHours ?? 0,
+    suggestedRole: item.suggestedRole || "",
+    unit: item.unit || null,
+    hourlyRate: item.hourlyRate ?? 0,
+    amount: item.amount ?? 0,
+  }));
+}
+
+function roundToTenth(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function buildScaledRefinementItems(sourceItems, targetBudget) {
+  const currentTotal = sourceItems.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  );
+
+  if (!Number.isFinite(currentTotal) || currentTotal <= 0) {
+    return sourceItems.map((item) => ({
+      description: item.description,
+      type: item.type || "service",
+      estimatedHours: item.estimatedHours ?? 0,
+      suggestedRole: item.suggestedRole || "",
+      unit: item.unit || null,
+      hourlyRate: item.hourlyRate ?? 0,
+      amount: item.amount ?? 0,
+    }));
+  }
+
+  const scale = targetBudget / currentTotal;
+  const refinedItems = sourceItems.map((item) => {
+    const baseHours = Number(item.estimatedHours || 0);
+    const hourlyRate = Number(item.hourlyRate || 0);
+    const scaledHours =
+      baseHours <= 0 || hourlyRate <= 0
+        ? baseHours
+        : Math.max(0.1, roundToTenth(baseHours * scale));
+
+    return {
+      description: item.description,
+      type: item.type || "service",
+      estimatedHours: scaledHours,
+      suggestedRole: item.suggestedRole || "",
+      unit: item.unit || null,
+      hourlyRate,
+      amount: Math.round(hourlyRate * scaledHours * 100) / 100,
+    };
+  });
+
+  const delta = Math.round(
+    (targetBudget -
+      refinedItems.reduce((sum, item) => sum + Number(item.amount || 0), 0)) *
+      100,
+  ) / 100;
+  const adjustableIndex = [...refinedItems]
+    .reverse()
+    .findIndex((item) => Number(item.hourlyRate || 0) > 0);
+
+  if (adjustableIndex !== -1 && Math.abs(delta) >= 0.01) {
+    const targetIndex = refinedItems.length - 1 - adjustableIndex;
+    const targetItem = refinedItems[targetIndex];
+    const rate = Number(targetItem.hourlyRate || 0);
+    const nextAmount = Math.max(0, Math.round((targetItem.amount + delta) * 100) / 100);
+    const nextHours =
+      rate > 0 ? Math.max(0.1, roundToTenth(nextAmount / rate)) : targetItem.estimatedHours;
+
+    refinedItems[targetIndex] = {
+      ...targetItem,
+      estimatedHours: nextHours,
+      amount: Math.round(rate * nextHours * 100) / 100,
+    };
+  }
+
+  return refinedItems;
+}
+
+function buildAnalyzeFallbackModelNames() {
+  const modelName = getGeminiModelName("analyze");
+
+  return Array.from(
+    new Set(
+      [
+        process.env.GEMINI_ANALYZE_FALLBACK_MODEL?.trim(),
+        "gemini-2.5-flash",
+        "gemini-2.0-flash-001",
+        getGeminiModelName("default"),
+      ].filter((value) => value && value !== modelName),
+    ),
+  );
+}
+
+async function createQuoteDraftCopy(tx, sourceQuote, workspaceId, overrides = {}) {
+  const normalizedItems = Array.isArray(overrides.items) ? overrides.items : [];
+  const totalAmount = normalizedItems.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  );
+
+  return tx.quote.create({
+    data: {
+      customerName: sourceQuote.customerName,
+      customerId: sourceQuote.customerId || null,
+      projectName: overrides.projectName ?? sourceQuote.projectName,
+      projectType: overrides.projectType ?? sourceQuote.projectType,
+      createdAt: sourceQuote.createdAt,
+      expectedDays:
+        overrides.expectedDays !== undefined
+          ? overrides.expectedDays
+          : sourceQuote.expectedDays,
+      description:
+        overrides.description !== undefined
+          ? overrides.description
+          : sourceQuote.description,
+      status: "DRAFT",
+      totalAmount,
+      paymentTerms:
+        overrides.paymentTerms !== undefined
+          ? overrides.paymentTerms
+          : sourceQuote.paymentTerms,
+      validityDays:
+        overrides.validityDays !== undefined
+          ? overrides.validityDays
+          : sourceQuote.validityDays,
+      wonAmount: null,
+      workspaceId,
+      materials: sourceQuote.materials ?? null,
+      roleRates: sourceQuote.roleRates ?? null,
+      items: {
+        create: normalizedItems.map((item) => ({
+          description: item.description,
+          type: item.type || "service",
+          estimatedHours: Number(item.estimatedHours || 0),
+          suggestedRole: item.suggestedRole || "",
+          unit: item.unit || null,
+          hourlyRate: Number(item.hourlyRate || 0),
+          amount: Number(item.amount || 0),
+        })),
+      },
+    },
+    include: {
+      items: true,
+      customer: true,
+    },
+  });
+}
+
+/**
+ * Translate a quote into a new draft copy
+ * POST /api/ai/translate-quote
+ */
+export async function translateQuote(req, res) {
+  try {
+    const { quoteId, targetLanguage } = req.body;
+    const normalizedTargetLanguage = normalizeTextField(targetLanguage);
+    const workspaceId = req.workspace?.id;
+    const creditCost = 1;
+
+    if (!workspaceId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Workspace not found" });
+    }
+
+    if (req.isFallbackWorkspace) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Unable to verify current workspace ID. Please select a workspace.",
+        errorCode: "WORKSPACE_ID_MISSING",
+      });
+    }
+
+    if (!quoteId || !normalizedTargetLanguage) {
+      return res.status(400).json({
+        success: false,
+        message: "quoteId and targetLanguage are required",
+      });
+    }
+
+    const [workspace, quote] = await Promise.all([
+      prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { creditBalance: true },
+      }),
+      prisma.quote.findUnique({
+        where: { id: quoteId },
+        include: { items: true, customer: true },
+      }),
+    ]);
+
+    if (!workspace) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Workspace does not exist" });
+    }
+
+    if (workspace.creditBalance < creditCost) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient credits. Please top up your account.",
+        errorCode: "INSUFFICIENT_CREDITS",
+      });
+    }
+
+    if (!quote || quote.workspaceId !== workspaceId) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quote not found" });
+    }
+
+    const geminiClient = getGeminiClient();
+    if (!geminiClient) {
+      return res.status(500).json({
+        success: false,
+        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
+        apiKeyPresent: false,
+      });
+    }
+
+    const sourcePayload = {
+      projectName: quote.projectName,
+      description: quote.description || "",
+      paymentTerms: quote.paymentTerms || "",
+      items: quote.items.map((item) => ({
+        id: item.id,
+        description: item.description,
+        suggestedRole: item.suggestedRole || "",
+      })),
+    };
+
+    const prompt = `
+Translate the following software quote content into ${normalizedTargetLanguage}.
+Return the result EXCLUSIVELY as valid JSON.
+
+JSON structure:
+{
+  "projectName": "string",
+  "description": "string",
+  "paymentTerms": "string",
+  "items": [
+    {
+      "id": "string",
+      "description": "string"
+    }
+  ]
+}
+
+Rules:
+- Preserve the professional meaning and tone.
+- Keep company names, people names, product names, URLs, emails, and numeric values unchanged when appropriate.
+- Keep the same item ids.
+- Do not add or remove items.
+- Do not change suggestedRole, estimatedHours, hourlyRate, amount, type, or unit.
+- If a source field is empty, return an empty string.
+
+Source quote JSON:
+${JSON.stringify(sourcePayload, null, 2)}
+`;
+
+    let parsedResult;
+    try {
+      const modelName = getGeminiModelName("analyze");
+      const fallbackModelNames = buildAnalyzeFallbackModelNames();
+      const text = await generateGeminiJsonText(
+        geminiClient,
+        [{ text: prompt }],
+        {
+          modelName,
+          fallbackModelNames,
+          maxQueueWaitMs: TRANSLATE_QUEUE_WAIT_MS,
+        },
+      );
+      parsedResult = parseAiJsonPayload(text, "translation response");
+    } catch (error) {
+      const statusCode = extractGeminiStatusCode(error);
+      const retryAfterSeconds = extractGeminiRetryAfterSeconds(
+        error,
+        DEFAULT_AI_RETRY_AFTER_SECONDS,
+      );
+
+      if (statusCode === 429) {
+        res.set("Retry-After", String(retryAfterSeconds));
+        return res.status(429).json({
+          success: false,
+          message: `AI is currently busy. Please retry in about ${retryAfterSeconds} seconds.`,
+          errorCode: "AI_RATE_LIMIT",
+          retryAfterSeconds,
+          apiKeyPresent: true,
+        });
+      }
+
+      if (isGeminiRetryableStatus(statusCode)) {
+        return res.status(503).json({
+          success: false,
+          message: "AI service is temporarily unavailable. Please try again later.",
+          errorCode: "AI_TEMP_UNAVAILABLE",
+          apiKeyPresent: true,
+        });
+      }
+
+      throw error;
+    }
+
+    const translatedQuote = await prisma.$transaction(async (tx) => {
+      const draftCopy = await createQuoteDraftCopy(tx, quote, workspaceId, {
+        projectName:
+          normalizeTextField(parsedResult?.projectName) || quote.projectName,
+        description:
+          normalizeTextField(parsedResult?.description) || quote.description,
+        paymentTerms:
+          normalizeTextField(parsedResult?.paymentTerms) || quote.paymentTerms,
+        items: buildTranslatedItemCopies(quote.items, parsedResult?.items),
+      });
+
+      await tx.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          creditBalance: {
+            decrement: creditCost,
+          },
+        },
+      });
+
+      return draftCopy;
+    });
+
+    return res.json({
+      success: true,
+      quoteId: translatedQuote.id,
+      quote: translatedQuote,
+    });
+  } catch (error) {
+    console.error("translateQuote error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to translate quote",
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Refine a quote toward a target budget and save as a new draft copy
+ * POST /api/ai/refine-quote
+ */
+export async function refineQuote(req, res) {
+  try {
+    const { quoteId, targetBudget } = req.body;
+    const numericTargetBudget = Number(targetBudget);
+    const workspaceId = req.workspace?.id;
+    const creditCost = 3;
+
+    if (!workspaceId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Workspace not found" });
+    }
+
+    if (req.isFallbackWorkspace) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Unable to verify current workspace ID. Please select a workspace.",
+        errorCode: "WORKSPACE_ID_MISSING",
+      });
+    }
+
+    if (!quoteId || !Number.isFinite(numericTargetBudget) || numericTargetBudget <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "quoteId and a positive targetBudget are required",
+      });
+    }
+
+    const [workspace, quote] = await Promise.all([
+      prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { creditBalance: true },
+      }),
+      prisma.quote.findUnique({
+        where: { id: quoteId },
+        include: { items: true, customer: true },
+      }),
+    ]);
+
+    if (!workspace) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Workspace does not exist" });
+    }
+
+    if (workspace.creditBalance < creditCost) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient credits. Please top up your account.",
+        errorCode: "INSUFFICIENT_CREDITS",
+      });
+    }
+
+    if (!quote || quote.workspaceId !== workspaceId) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quote not found" });
+    }
+
+    const sourcePayload = {
+      projectName: quote.projectName,
+      targetBudget: numericTargetBudget,
+      currentTotal: quote.totalAmount || 0,
+      expectedDays: quote.expectedDays,
+      items: quote.items.map((item) => ({
+        id: item.id,
+        description: item.description,
+        suggestedRole: item.suggestedRole || "",
+        estimatedHours: Number(item.estimatedHours || 0),
+        hourlyRate: Number(item.hourlyRate || 0),
+        amount: Number(item.amount || 0),
+      })),
+    };
+
+    let refinedItems = buildScaledRefinementItems(quote.items, numericTargetBudget);
+    let refinedExpectedDays =
+      quote.expectedDays && quote.totalAmount
+        ? Math.max(
+            1,
+            Math.round((quote.expectedDays * numericTargetBudget) / quote.totalAmount),
+          )
+        : quote.expectedDays;
+
+    const geminiClient = getGeminiClient();
+    if (geminiClient) {
+      try {
+        const modelName = getGeminiModelName("analyze");
+        const fallbackModelNames = buildAnalyzeFallbackModelNames();
+        const prompt = `
+Refine this software quote so the total price moves as close as possible to ${numericTargetBudget} TWD.
+Return the result EXCLUSIVELY as valid JSON.
+
+JSON structure:
+{
+  "expectedDays": number,
+  "items": [
+    {
+      "id": "string",
+      "estimatedHours": number
+    }
+  ]
+}
+
+Rules:
+- Keep the same number of items and the same item ids.
+- Adjust only estimatedHours.
+- Do not change descriptions, suggestedRole, hourlyRate, type, unit, or item order.
+- Keep estimatedHours non-negative and use at most one decimal place.
+- The final total should be as close as possible to the target budget while preserving realistic phase balance.
+
+Source quote JSON:
+${JSON.stringify(sourcePayload, null, 2)}
+`;
+
+        const text = await generateGeminiJsonText(
+          geminiClient,
+          [{ text: prompt }],
+          {
+            modelName,
+            fallbackModelNames,
+            maxQueueWaitMs: REFINE_QUEUE_WAIT_MS,
+          },
+        );
+        const parsedResult = parseAiJsonPayload(text, "refinement response");
+        const hoursById = new Map(
+          Array.isArray(parsedResult?.items)
+            ? parsedResult.items.map((item) => [item?.id, Number(item?.estimatedHours)])
+            : [],
+        );
+
+        refinedItems = quote.items.map((item) => {
+          const refinedHoursCandidate = hoursById.get(item.id);
+          const estimatedHours =
+            Number.isFinite(refinedHoursCandidate) && refinedHoursCandidate >= 0
+              ? Math.max(0.1, roundToTenth(refinedHoursCandidate))
+              : Number(item.estimatedHours || 0);
+          const hourlyRate = Number(item.hourlyRate || 0);
+
+          return {
+            description: item.description,
+            type: item.type || "service",
+            estimatedHours,
+            suggestedRole: item.suggestedRole || "",
+            unit: item.unit || null,
+            hourlyRate,
+            amount: Math.round(hourlyRate * estimatedHours * 100) / 100,
+          };
+        });
+
+        if (
+          Number.isFinite(Number(parsedResult?.expectedDays)) &&
+          Number(parsedResult.expectedDays) > 0
+        ) {
+          refinedExpectedDays = Math.round(Number(parsedResult.expectedDays));
+        }
+      } catch (error) {
+        console.warn("refineQuote AI refinement fell back to scaled refinement:", error);
+      }
+    }
+
+    const refinedQuote = await prisma.$transaction(async (tx) => {
+      const draftCopy = await createQuoteDraftCopy(tx, quote, workspaceId, {
+        items: refinedItems,
+        expectedDays: refinedExpectedDays,
+      });
+
+      await tx.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          creditBalance: {
+            decrement: creditCost,
+          },
+        },
+      });
+
+      return draftCopy;
+    });
+
+    return res.json({
+      success: true,
+      quoteId: refinedQuote.id,
+      quote: refinedQuote,
+    });
+  } catch (error) {
+    console.error("refineQuote error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to refine quote",
+      error: error.message,
+    });
+  }
+}
+
 /**
  * Analyze requirements using AI
  * POST /api/ai/analyze
  */
 export async function analyzeRequirements(req, res) {
   try {
-    const { requirements, images } = req.body;
+    const { requirements, images, projectType } = req.body;
     const normalizedRequirements =
       typeof requirements === "string" ? requirements.trim() : "";
+    const normalizedProjectType =
+      typeof projectType === "string" ? projectType.trim() : "";
     const safeImages = Array.isArray(images) ? images : [];
     const workspaceId = req.workspace?.id;
     const creditCost = 10;
@@ -812,16 +1386,37 @@ export async function analyzeRequirements(req, res) {
     }
 
     const modelName = getGeminiModelName("analyze");
+    const isMaterialHeavyProject =
+      /裝潢|装修|裝修|室內|室内|工程|施工|拆除|泥作|木作|水電|机电|機電|管線|管道|天花|地坪|油漆|建材|櫃體|系统柜|系統櫃|家具|傢俱|燈具|灯具|衛浴|卫浴|防水|renovation|interior|construction|fit[ -]?out/i.test(
+        `${normalizedProjectType} ${normalizedRequirements}`,
+      );
     const prompt = `
-Please analyze these software requirements and break them down into actionable tasks. 
+Please analyze these project requirements and break them down into actionable quote items.
 Return the result EXCLUSIVELY as a valid JSON object.
 
 Important Instructions:
-1. **Language**: All text content (description, etc.) MUST be in **Traditional Chinese (Taiwan)** (繁體中文).
-2. **Financials**: 
-   - You MUST estimate a reasonable "hourlyRate" (e.g., between 800 and 3000 TWD based on role).
+1. **Language**: All text content (summary, description, material names, units, etc.) MUST be in **Traditional Chinese (Taiwan)** (繁體中文).
+2. **Financials**:
+   - You MUST estimate a reasonable "hourlyRate" in TWD.
+   - For service items, "hourlyRate" means labor/unit hourly rate.
+   - For material items, "hourlyRate" means unit price.
    - "amount" MUST be calculated as "estimatedHours" * "hourlyRate".
    - Do NOT return 0 for rates or amounts.
+3. **Item Type Classification**:
+   - Each item MUST include "type" and it must be either "service" or "material".
+   - "service" = labor, design, planning, project management, engineering execution, testing, installation, supervision, or any work billed by effort.
+   - "material" = physical products, fixtures, hardware, building materials, wiring, pipes, boards, paint, tiles, lighting, sanitaryware, appliances, furniture, or consumables.
+4. **Service Item Rules**:
+   - "suggestedRole" MUST be one of: "design", "frontend", "backend", "pm", "qa", "other".
+   - "unit" should be null or an empty string.
+5. **Material Item Rules**:
+   - "suggestedRole" should be the material name or material category in Traditional Chinese, not a staff role.
+   - "estimatedHours" represents quantity for materials.
+   - "unit" MUST be a practical quantity unit such as "式", "組", "件", "支", "才", "片", "箱", "桶", "公尺", "平方公尺", "盞", "座".
+6. **Interior / Construction Projects**:
+   - If the requirement is related to interior design, renovation, construction, fit-out, engineering, or any physical build project, you MUST separate labor/service items and material items.
+   - When physical materials are reasonably implied, you MUST include material items and not hide them inside service items.
+   - For these projects, return at least 2 material items unless the user explicitly says labor only / materials excluded.
 
 JSON Structure:
 {
@@ -829,14 +1424,20 @@ JSON Structure:
   "items": [
     {
       "id": "string (e.g., ai_1)",
-      "description": "string (Task description in Traditional Chinese)",
+      "type": "service" | "material",
+      "description": "string (Task or material description in Traditional Chinese)",
       "estimatedHours": number,
-      "suggestedRole": "design" | "frontend" | "backend" | "pm" | "qa" | "other",
+      "suggestedRole": "string",
+      "unit": "string | null",
       "hourlyRate": number,
       "amount": number
     }
   ]
 }
+
+Project Type Hint:
+${normalizedProjectType || "Not specified"}
+${isMaterialHeavyProject ? "This request likely requires explicit material line items." : "This request may be service-only unless materials are clearly implied."}
 
 Requirements:
 ${normalizedRequirements}
@@ -919,6 +1520,61 @@ ${normalizedRequirements}
       );
     }
 
+    const knownServiceRoles = new Set([
+      "design",
+      "frontend",
+      "backend",
+      "pm",
+      "qa",
+      "other",
+    ]);
+    const normalizedItems = Array.isArray(parsedResult?.items)
+      ? parsedResult.items.map((item, index) => {
+          const rawType = normalizeTextField(item?.type).toLowerCase();
+          const rawRole = normalizeTextField(item?.suggestedRole);
+          const rawUnit = normalizeTextField(item?.unit);
+          const normalizedType =
+            rawType === "material" ||
+            (!knownServiceRoles.has(rawRole.toLowerCase()) && !!rawUnit)
+              ? "material"
+              : "service";
+          const estimatedCandidate = Number(item?.estimatedHours);
+          const estimatedHours =
+            Number.isFinite(estimatedCandidate) && estimatedCandidate > 0
+              ? normalizedType === "material"
+                ? Math.round(estimatedCandidate * 100) / 100
+                : Math.max(0.1, roundToTenth(estimatedCandidate))
+              : 1;
+          const hourlyRateCandidate = Number(item?.hourlyRate);
+          const hourlyRate =
+            Number.isFinite(hourlyRateCandidate) && hourlyRateCandidate > 0
+              ? Math.round(hourlyRateCandidate)
+              : normalizedType === "material"
+                ? 1000
+                : 1500;
+
+          return {
+            id: normalizeTextField(item?.id) || `ai_${index + 1}`,
+            type: normalizedType,
+            description:
+              normalizeTextField(item?.description) ||
+              `${normalizedType === "material" ? "材料" : "服務"}項目 ${index + 1}`,
+            estimatedHours,
+            suggestedRole:
+              normalizedType === "material"
+                ? rawRole || `材料項目 ${index + 1}`
+                : knownServiceRoles.has(rawRole.toLowerCase())
+                  ? rawRole.toLowerCase()
+                  : rawRole || "other",
+            unit: normalizedType === "material" ? rawUnit || "式" : null,
+            hourlyRate,
+            amount: Math.round(hourlyRate * estimatedHours),
+          };
+        })
+      : [];
+    const normalizedSummary =
+      normalizeTextField(parsedResult?.summary) || "AI 需求分析結果";
+
     // Deduct credits after a successful parse
     await prisma.workspace.update({
       where: { id: workspaceId },
@@ -930,8 +1586,8 @@ ${normalizedRequirements}
     });
 
     return res.json({
-      summary: parsedResult.summary,
-      items: parsedResult.items,
+      summary: normalizedSummary,
+      items: normalizedItems,
     });
   } catch (error) {
     console.error("CRITICAL AI Analysis error:", error);

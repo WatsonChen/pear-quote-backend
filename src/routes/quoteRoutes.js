@@ -6,6 +6,7 @@ import {
   getQuoteById,
   updateQuote,
   deleteQuote,
+  exportQuote,
   generateQuote,
 } from "../controllers/quoteController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
@@ -20,6 +21,7 @@ router.get("/", getQuotes);
 router.get("/:id", getQuoteById);
 router.put("/:id", updateQuote);
 router.delete("/:id", deleteQuote);
+router.post("/:id/export", exportQuote);
 router.post("/:id/generate", generateQuote);
 
 export default router;

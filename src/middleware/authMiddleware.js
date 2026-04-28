@@ -40,26 +40,42 @@ export async function authMiddleware(req, res, next) {
     };
 
     // Verify Workspace Access if X-Workspace-Id is provided
-    let workspaceId = req.headers["x-workspace-id"];
+    const rawWorkspaceId = req.headers["x-workspace-id"];
+    let workspaceId = Array.isArray(rawWorkspaceId)
+      ? rawWorkspaceId[0]
+      : rawWorkspaceId;
     let workspaceUser;
 
     // Check for string "undefined" or "null" from localStorage issues
-    if (workspaceId === "undefined" || workspaceId === "null") {
+    if (typeof workspaceId === "string") {
+      workspaceId = workspaceId.trim();
+    }
+
+    if (
+      !workspaceId ||
+      workspaceId === "undefined" ||
+      workspaceId === "null"
+    ) {
       workspaceId = undefined;
     }
 
     if (workspaceId) {
-      workspaceUser = await prisma.workspaceUser.findUnique({
+      workspaceUser = await prisma.workspaceUser.findFirst({
         where: {
-          userId_workspaceId: {
-            userId: decoded.userId,
-            workspaceId: workspaceId,
-          },
+          userId: decoded.userId,
+          workspaceId,
         },
         include: {
           workspace: true,
         },
       });
+
+      if (!workspaceUser) {
+        console.warn(
+          `[authMiddleware] Workspace ${workspaceId} not found for user ${decoded.userId}, falling back to first available workspace.`,
+        );
+        req.isFallbackWorkspace = true;
+      }
     } else {
       // Fallback is DANGEROUS for credit-based actions
       // However, to prevent breaking the entire app, we will still allow fallback
@@ -73,6 +89,18 @@ export async function authMiddleware(req, res, next) {
       });
       if (workspaces.length > 0) {
         workspaceUser = workspaces[0];
+      }
+    }
+
+    if (!workspaceUser) {
+      const workspaces = await prisma.workspaceUser.findMany({
+        where: { userId: decoded.userId },
+        include: { workspace: true },
+        take: 1,
+      });
+      if (workspaces.length > 0) {
+        workspaceUser = workspaces[0];
+        req.isFallbackWorkspace = true;
       }
     }
 

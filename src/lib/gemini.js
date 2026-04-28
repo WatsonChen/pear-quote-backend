@@ -191,6 +191,21 @@ function isGeminiTransportRetryableStatus(statusCode) {
   return statusCode === 500 || statusCode === 502 || statusCode === 503 || statusCode === 504;
 }
 
+function shouldTryNextGeminiModel(error) {
+  if (!error) return false;
+
+  if (error instanceof GeminiCooldownError) {
+    return true;
+  }
+
+  if (error instanceof GeminiQueueBusyError) {
+    return true;
+  }
+
+  const statusCode = extractGeminiStatusCode(error);
+  return statusCode === 429 || isGeminiTransportRetryableStatus(statusCode);
+}
+
 function getGeminiCooldownSeconds(modelName) {
   const cooldownUntil = geminiCooldowns.get(modelName) ?? 0;
   const remainingMs = cooldownUntil - Date.now();
@@ -337,12 +352,12 @@ export async function generateGeminiText(
       lastError = error;
 
       if (
-        isGeminiModelUnavailableError(error) &&
+        (isGeminiModelUnavailableError(error) || shouldTryNextGeminiModel(error)) &&
         index < candidateModelNames.length - 1
       ) {
         const nextModelName = candidateModelNames[index + 1];
         console.warn(
-          `[AI] Gemini model ${candidateModelName} unavailable. Falling back to ${nextModelName}.`,
+          `[AI] Gemini model ${candidateModelName} failed (${error?.errorCode || extractGeminiStatusCode(error) || error?.name || "unknown"}). Falling back to ${nextModelName}.`,
         );
         continue;
       }
