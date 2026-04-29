@@ -69,6 +69,15 @@ model Quote {
   workspaceId  String
   materials    Json?
   roleRates    Json?
+  shareToken   String      @unique @default(uuid())
+  shareViewedAt DateTime?
+  lastViewedAt DateTime?
+  viewCount    Int         @default(0)
+  proposalStatus String    @default("draft")
+  acceptedAt   DateTime?
+  clientResponseName String?
+  clientResponseEmail String?
+  clientResponseMessage String?
   customer     Customer?   @relation(fields: [customerId], references: [id])
   workspace    Workspace   @relation(fields: [workspaceId], references: [id])
   items        QuoteItem[]
@@ -139,5 +148,6 @@ model User {
   phoneNumber          String?         @unique
   termsAcceptedAt      DateTime?
   termsVersionAccepted String?
+  bookingUrl           String?
   workspaces           WorkspaceUser[]
 }

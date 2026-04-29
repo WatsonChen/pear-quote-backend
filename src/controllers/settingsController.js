@@ -7,10 +7,21 @@ import prisma from "../lib/prisma.js";
 export async function getSettings(req, res) {
   try {
     const workspaceId = req.workspace?.id;
+    const userId = req.user?.userId;
     // Assuming each workspace has their own settings record
-    let settings = await prisma.systemSettings.findUnique({
-      where: { workspaceId },
-    });
+    const [settingsResult, user] = await Promise.all([
+      prisma.systemSettings.findUnique({
+        where: { workspaceId },
+      }),
+      userId
+        ? prisma.user.findUnique({
+            where: { id: userId },
+            select: { bookingUrl: true },
+          })
+        : null,
+    ]);
+
+    let settings = settingsResult;
 
     if (!settings) {
       // Create default settings if not exists for this user
@@ -25,7 +36,10 @@ export async function getSettings(req, res) {
       });
     }
 
-    return res.json(settings);
+    return res.json({
+      ...settings,
+      bookingUrl: user?.bookingUrl || null,
+    });
   } catch (error) {
     console.error("Get settings error:", error);
     return res.status(500).json({
@@ -58,6 +72,7 @@ export async function updateSettings(req, res) {
       projectTypes, // Dynamic project types
       materials, // Dynamic materials
       quoteValidityDays,
+      bookingUrl,
     } = req.body;
 
     const settings = await prisma.systemSettings.upsert({
@@ -109,7 +124,29 @@ export async function updateSettings(req, res) {
       },
     });
 
-    return res.json(settings);
+    let userProfile = null;
+    if (req.user?.userId && bookingUrl !== undefined) {
+      userProfile = await prisma.user.update({
+        where: { id: req.user.userId },
+        data: {
+          bookingUrl:
+            typeof bookingUrl === "string" && bookingUrl.trim()
+              ? bookingUrl.trim()
+              : null,
+        },
+        select: { bookingUrl: true },
+      });
+    } else if (req.user?.userId) {
+      userProfile = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        select: { bookingUrl: true },
+      });
+    }
+
+    return res.json({
+      ...settings,
+      bookingUrl: userProfile?.bookingUrl || null,
+    });
   } catch (error) {
     console.error("Update settings error:", error);
     return res.status(500).json({

@@ -11,6 +11,7 @@ import workspaceRoutes from "./routes/workspaceRoutes.js";
 import baseRoutes from "./routes/baseRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import proposalRoutes from "./routes/proposalRoutes.js";
 
 const app = express();
 
@@ -50,6 +51,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use("/", baseRoutes);
 app.use("/api", authRoutes);
 app.use("/api/quotes", quoteRoutes);
+app.use("/api/proposals", proposalRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/users", userRoutes);
