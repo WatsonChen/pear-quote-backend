@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const DEFAULT_MODEL_NAME = "gemini-2.0-flash";
-const DEFAULT_ROUGH_ESTIMATE_MODEL_NAME = "gemini-1.5-flash";
+const DEFAULT_ROUGH_ESTIMATE_MODEL_NAME = "gemini-2.0-flash";
 const DEFAULT_ANALYZE_MODEL_NAME = "gemini-2.0-flash";
 const DEFAULT_ANALYTICS_MODEL_NAME = "gemini-2.0-flash";
 const GEMINI_RETRY_DELAYS_MS = [450, 900];
@@ -322,7 +322,13 @@ export async function generateGeminiText(
         for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
           try {
             const result = await model.generateContent(parts);
-            return result.response.text();
+            const responseText = result.response.text();
+            console.info(
+              index > 0
+                ? `[AI] Gemini request completed via fallback model ${candidateModelName} (primary: ${modelName}).`
+                : `[AI] Gemini request completed via primary model ${candidateModelName}.`,
+            );
+            return responseText;
           } catch (error) {
             candidateLastError = error;
             const statusCode = extractGeminiStatusCode(error);

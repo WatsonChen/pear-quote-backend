@@ -862,8 +862,8 @@ function buildAnalyzeFallbackModelNames() {
     new Set(
       [
         process.env.GEMINI_ANALYZE_FALLBACK_MODEL?.trim(),
-        "gemini-2.5-flash",
-        "gemini-2.0-flash-001",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
         getGeminiModelName("default"),
       ].filter((value) => value && value !== modelName),
     ),
@@ -1324,9 +1324,11 @@ ${JSON.stringify(sourcePayload, null, 2)}
  */
 export async function analyzeRequirements(req, res) {
   try {
-    const { requirements, images, projectType } = req.body;
+    const { requirements, images, projectType, templateContext } = req.body;
     const normalizedRequirements =
       typeof requirements === "string" ? requirements.trim() : "";
+    const normalizedTemplateContext =
+      typeof templateContext === "string" ? templateContext.trim() : "";
     const normalizedProjectType =
       typeof projectType === "string" ? projectType.trim() : "";
     const safeImages = Array.isArray(images) ? images : [];
@@ -1370,7 +1372,11 @@ export async function analyzeRequirements(req, res) {
     }
 
     // Allow empty requirements if images are provided
-    if (!normalizedRequirements && safeImages.length === 0) {
+    if (
+      !normalizedRequirements &&
+      !normalizedTemplateContext &&
+      safeImages.length === 0
+    ) {
       return res
         .status(400)
         .json({ message: "Requirements text or images are required" });
@@ -1388,7 +1394,7 @@ export async function analyzeRequirements(req, res) {
     const modelName = getGeminiModelName("analyze");
     const isMaterialHeavyProject =
       /裝潢|装修|裝修|室內|室内|工程|施工|拆除|泥作|木作|水電|机电|機電|管線|管道|天花|地坪|油漆|建材|櫃體|系统柜|系統櫃|家具|傢俱|燈具|灯具|衛浴|卫浴|防水|renovation|interior|construction|fit[ -]?out/i.test(
-        `${normalizedProjectType} ${normalizedRequirements}`,
+        `${normalizedProjectType} ${normalizedRequirements} ${normalizedTemplateContext}`,
       );
     const prompt = `
 Please analyze these project requirements and break them down into actionable quote items.
@@ -1439,13 +1445,17 @@ Project Type Hint:
 ${normalizedProjectType || "Not specified"}
 ${isMaterialHeavyProject ? "This request likely requires explicit material line items." : "This request may be service-only unless materials are clearly implied."}
 
-Requirements:
-${normalizedRequirements}
+Quote Template Context:
+${normalizedTemplateContext || "No selected quote template context."}
+
+User Requirements:
+${normalizedRequirements || "No additional user-entered requirements."}
 `;
 
     console.log("Calling Gemini AI via official SDK with payload:", {
       modelName,
       requirementsLength: normalizedRequirements.length,
+      templateContextLength: normalizedTemplateContext.length,
       imagesCount: safeImages.length,
     });
 
@@ -1467,8 +1477,10 @@ ${normalizedRequirements}
 
     let text;
     try {
+      const fallbackModelNames = buildAnalyzeFallbackModelNames();
       text = await generateGeminiJsonText(geminiClient, parts, {
         modelName,
+        fallbackModelNames,
         maxQueueWaitMs: ANALYZE_QUEUE_WAIT_MS,
       });
     } catch (error) {
