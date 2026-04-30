@@ -11,6 +11,7 @@ import workspaceRoutes from "./routes/workspaceRoutes.js";
 import baseRoutes from "./routes/baseRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import proposalRoutes from "./routes/proposalRoutes.js";
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/proposals", proposalRoutes);
 
 // Swagger Documentation
 import swaggerUi from "swagger-ui-express";

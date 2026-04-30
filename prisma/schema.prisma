@@ -69,6 +69,17 @@ model Quote {
   workspaceId  String
   materials    Json?
   roleRates    Json?
+  shareToken   String?
+  proposalStatus String    @default("draft")
+  shareViewedAt DateTime?
+  lastViewedAt DateTime?
+  viewCount    Int         @default(0)
+  acceptedAt   DateTime?
+  clientResponseName String?
+  clientResponseEmail String?
+  clientResponseMessage String?
+  proposalContent Json?
+  proposalTheme Json?
   customer     Customer?   @relation(fields: [customerId], references: [id])
   workspace    Workspace   @relation(fields: [workspaceId], references: [id])
   items        QuoteItem[]

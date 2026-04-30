@@ -1,4 +1,53 @@
+import crypto from "node:crypto";
 import prisma from "../lib/prisma.js";
+
+const PROPOSAL_CREDIT_COST = 15;
+
+function buildDefaultProposalContent(quote) {
+  const items = quote.items || [];
+  const included = items.map((item) => item.description).filter(Boolean);
+
+  return {
+    coverTitle: quote.projectName || "Client-ready Proposal",
+    subtitle: quote.description || "A practical plan with scope, timeline, pricing, and next steps.",
+    requirementUnderstanding:
+      quote.description ||
+      "We reviewed the current requirements and translated them into a clear delivery plan.",
+    solution:
+      "We will deliver the work in focused milestones, keep scope visible, and provide a client-ready acceptance path.",
+    included,
+    excluded: [
+      "Unlisted third-party platform fees",
+      "Scope changes after approval",
+      "Ongoing maintenance unless agreed separately",
+    ],
+    milestones: [
+      { title: "Discovery and alignment", detail: "Confirm scope, content, assets, and success criteria." },
+      { title: "Production", detail: "Design, build, review, and iterate on the agreed deliverables." },
+      { title: "Acceptance", detail: "Final check, handover, and client approval." },
+    ],
+    paymentTerms:
+      quote.paymentTerms ||
+      "50% deposit to begin. Remaining balance due after final acceptance.",
+    nextSteps:
+      "Review this proposal, confirm acceptance, and we will schedule the kickoff.",
+    ctaText: "Accept proposal",
+  };
+}
+
+async function buildUniqueShareToken(tx = prisma) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const token = crypto.randomBytes(16).toString("hex");
+    const existing = await tx.quote.findFirst({
+      where: { shareToken: token },
+      select: { id: true },
+    });
+
+    if (!existing) return token;
+  }
+
+  return `${Date.now().toString(36)}${crypto.randomBytes(8).toString("hex")}`;
+}
 
 function formatDate(value) {
   if (!value) return "";
@@ -1018,6 +1067,9 @@ export async function createQuote(req, res) {
       wonAmount, // Add - actual deal amount
       roleRates, // Add
       materials, // Add
+      proposalStatus,
+      proposalContent,
+      proposalTheme,
     } = req.body;
 
     const workspaceId = req.workspace?.id;
@@ -1216,6 +1268,11 @@ export async function updateQuote(req, res) {
           validityDays: validityDays ? parseInt(validityDays) : undefined, // Add
           roleRates: roleRates !== undefined ? roleRates : undefined, // Add
           materials: materials !== undefined ? materials : undefined, // Add
+          proposalStatus:
+            proposalStatus !== undefined ? proposalStatus : undefined,
+          proposalContent:
+            proposalContent !== undefined ? proposalContent : undefined,
+          proposalTheme: proposalTheme !== undefined ? proposalTheme : undefined,
         },
       });
 
@@ -1390,7 +1447,7 @@ export async function generateQuote(req, res) {
   try {
     const { id } = req.params;
     const workspaceId = req.workspace?.id;
-    const creditCost = 10;
+    const creditCost = PROPOSAL_CREDIT_COST;
 
     if (!workspaceId) {
       return res
@@ -1401,6 +1458,7 @@ export async function generateQuote(req, res) {
     // Verify quote belongs to this workspace
     const quote = await prisma.quote.findUnique({
       where: { id },
+      include: { items: true },
     });
 
     if (!quote || quote.workspaceId !== workspaceId) {
@@ -1429,19 +1487,43 @@ export async function generateQuote(req, res) {
       });
     }
 
-    // Deduct credits
-    const updatedWorkspace = await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        creditBalance: {
-          decrement: creditCost,
+    const shareToken = quote.shareToken || (await buildUniqueShareToken());
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedQuote = await tx.quote.update({
+        where: { id },
+        data: {
+          shareToken,
+          proposalStatus: quote.proposalStatus || "draft",
+          proposalContent:
+            quote.proposalContent || buildDefaultProposalContent(quote),
+          proposalTheme:
+            quote.proposalTheme || {
+              preset: "Professional",
+              themeColor: "#0f766e",
+              logoUrl: null,
+              coverImageUrl: null,
+            },
         },
-      },
+      });
+
+      const updatedWorkspace = await tx.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          creditBalance: {
+            decrement: creditCost,
+          },
+        },
+      });
+
+      return { updatedQuote, updatedWorkspace };
     });
 
     return res.json({
       success: true,
-      remainingBalance: updatedWorkspace.creditBalance,
+      quoteId: result.updatedQuote.id,
+      shareToken: result.updatedQuote.shareToken,
+      remainingBalance: result.updatedWorkspace.creditBalance,
     });
   } catch (error) {
     console.error("Generate quote error:", error);
