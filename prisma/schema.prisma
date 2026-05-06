@@ -69,7 +69,7 @@ model Quote {
   workspaceId  String
   materials    Json?
   roleRates    Json?
-  shareToken   String      @unique @default(uuid())
+  shareToken   String?     @unique @default(uuid())
   shareViewedAt DateTime?
   lastViewedAt DateTime?
   viewCount    Int         @default(0)
