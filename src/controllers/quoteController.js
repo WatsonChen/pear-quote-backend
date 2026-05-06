@@ -42,35 +42,103 @@ function resolveProposalStatusUpdate(requestedStatus, existingStatus) {
 
 const PROPOSAL_CREDIT_COST = 15;
 
+function shouldUseChineseProposalDefaults(quote) {
+  const sampleText = [
+    quote?.projectName,
+    quote?.description,
+    quote?.paymentTerms,
+    ...(Array.isArray(quote?.items)
+      ? quote.items.map((item) => item?.description || "")
+      : []),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (!sampleText) return true;
+  return /[\u3400-\u9fff]/.test(sampleText);
+}
+
 function buildDefaultProposalContent(quote) {
   const items = quote.items || [];
   const included = items.map((item) => item.description).filter(Boolean);
+  const isChinese = shouldUseChineseProposalDefaults(quote);
+
+  if (!isChinese) {
+    return {
+      coverTitle: quote.projectName || "Client-ready Proposal",
+      subtitle:
+        quote.description ||
+        "A practical plan with scope, timeline, pricing, and next steps.",
+      requirementUnderstanding:
+        quote.description ||
+        "We reviewed the current requirements and translated them into a clear delivery plan.",
+      solution:
+        included.slice(0, 3).join(", ") ||
+        "We will deliver the work in focused milestones, keep scope visible, and provide a client-ready acceptance path.",
+      included,
+      excluded: [
+        "Unlisted third-party platform fees",
+        "Scope changes after approval",
+        "Ongoing maintenance unless agreed separately",
+      ],
+      milestones: [
+        {
+          title: "Discovery and alignment",
+          detail: "Confirm scope, content, assets, and success criteria.",
+        },
+        {
+          title: "Production",
+          detail: "Design, build, review, and iterate on the agreed deliverables.",
+        },
+        {
+          title: "Acceptance",
+          detail: "Final check, handover, and client approval.",
+        },
+      ],
+      paymentTerms:
+        quote.paymentTerms ||
+        "50% deposit to begin. Remaining balance due after final acceptance.",
+      nextSteps:
+        "Review this proposal, confirm acceptance, and we will schedule the kickoff.",
+      ctaText: "Accept proposal",
+    };
+  }
 
   return {
-    coverTitle: quote.projectName || "Client-ready Proposal",
-    subtitle: quote.description || "A practical plan with scope, timeline, pricing, and next steps.",
+    coverTitle: quote.projectName || "客戶提案書",
+    subtitle:
+      quote.description || "依目前報價整理出範圍、時程、投資金額與下一步。",
     requirementUnderstanding:
       quote.description ||
-      "We reviewed the current requirements and translated them into a clear delivery plan.",
+      "我們已依據目前需求，整理出核心目標、交付範圍與優先順序。",
     solution:
-      "We will deliver the work in focused milestones, keep scope visible, and provide a client-ready acceptance path.",
+      included.slice(0, 3).join("、") ||
+      "我們會以清楚的里程碑推進工作，讓範圍、進度與驗收標準保持透明。",
     included,
     excluded: [
-      "Unlisted third-party platform fees",
-      "Scope changes after approval",
-      "Ongoing maintenance unless agreed separately",
+      "未列於本提案的第三方平台費用",
+      "提案確認後新增或變更的工作範圍",
+      "未另行約定的長期維護與營運服務",
     ],
     milestones: [
-      { title: "Discovery and alignment", detail: "Confirm scope, content, assets, and success criteria." },
-      { title: "Production", detail: "Design, build, review, and iterate on the agreed deliverables." },
-      { title: "Acceptance", detail: "Final check, handover, and client approval." },
+      {
+        title: "需求對齊",
+        detail: "確認範圍、素材、時程與成功標準。",
+      },
+      {
+        title: "執行製作",
+        detail: "依報價項目推進、審查並迭代調整。",
+      },
+      {
+        title: "驗收交付",
+        detail: "完成最終確認、移交成果並安排下一步。",
+      },
     ],
     paymentTerms:
       quote.paymentTerms ||
-      "50% deposit to begin. Remaining balance due after final acceptance.",
-    nextSteps:
-      "Review this proposal, confirm acceptance, and we will schedule the kickoff.",
-    ctaText: "Accept proposal",
+      "簽約後支付訂金開始執行，驗收完成後支付尾款。",
+    nextSteps: "確認提案內容後，請填寫接受表單，我們將安排啟動會議。",
+    ctaText: "接受此提案",
   };
 }
 
@@ -103,6 +171,65 @@ function formatDate(value) {
 function toSafeNumber(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function cleanOptionalString(value) {
+  const trimmed = String(value ?? "").trim();
+  return trimmed || undefined;
+}
+
+function parseOptionalInt(value, fallback = null) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const numeric = Number.parseInt(value, 10);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function normalizeQuoteItems(items) {
+  if (!Array.isArray(items)) return [];
+
+  return items.map((item, index) => {
+    const estimatedHours = toSafeNumber(item?.estimatedHours);
+    const hourlyRate = toSafeNumber(item?.hourlyRate);
+    const amount =
+      item?.amount === undefined || item?.amount === null
+        ? estimatedHours * hourlyRate
+        : toSafeNumber(item.amount);
+
+    return {
+      description: cleanOptionalString(item?.description) || `Item ${index + 1}`,
+      type: item?.type === "material" ? "material" : "service",
+      estimatedHours,
+      suggestedRole: cleanOptionalString(item?.suggestedRole),
+      unit: cleanOptionalString(item?.unit) || null,
+      hourlyRate,
+      amount,
+    };
+  });
+}
+
+function normalizeCreatedAt(value) {
+  if (!value) return undefined;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+async function resolveWorkspaceCustomerId(customerId, workspaceId, tx = prisma) {
+  const cleanedCustomerId = cleanOptionalString(customerId);
+  if (!cleanedCustomerId) return undefined;
+
+  const customer = await tx.customer.findFirst({
+    where: {
+      id: cleanedCustomerId,
+      workspaceId,
+    },
+    select: { id: true },
+  });
+
+  return customer?.id;
 }
 
 function formatAmount(value) {
@@ -1112,10 +1239,22 @@ export async function createQuote(req, res) {
     } = req.body;
 
     const workspaceId = req.workspace?.id;
+    if (!workspaceId) {
+      return res.status(400).json({
+        success: false,
+        message: "Workspace ID missing",
+      });
+    }
+
+    const normalizedItems = normalizeQuoteItems(items);
+    const resolvedCustomerId = await resolveWorkspaceCustomerId(
+      customerId,
+      workspaceId,
+    );
 
     // Calculate total amount
-    const totalAmount = items.reduce(
-      (sum, item) => sum + (item.amount || 0),
+    const totalAmount = normalizedItems.reduce(
+      (sum, item) => sum + item.amount,
       0,
     );
     // Calculate total cost (assuming hourlyRate is cost for now, or we need a separate cost field)
@@ -1125,35 +1264,30 @@ export async function createQuote(req, res) {
 
     const quote = await prisma.quote.create({
       data: {
-        customerName,
-        customerId,
-        projectName,
-        projectType,
-        createdAt: createdAt ? new Date(createdAt) : undefined,
-        expectedDays: expectedDays ? parseInt(expectedDays) : null,
-        description,
+        customerName: cleanOptionalString(customerName) || "未命名客戶",
+        ...(resolvedCustomerId ? { customerId: resolvedCustomerId } : {}),
+        projectName: cleanOptionalString(projectName) || "未命名專案",
+        projectType: cleanOptionalString(projectType) || "general",
+        createdAt: normalizeCreatedAt(createdAt),
+        expectedDays: parseOptionalInt(expectedDays, null),
+        description: cleanOptionalString(description) || null,
         status: "DRAFT",
         shareToken: crypto.randomUUID(),
         proposalStatus: normalizeProposalStatus(proposalStatus) || "draft",
         proposalContent: proposalContent || null,
         proposalTheme: proposalTheme || null,
         totalAmount,
-        wonAmount: wonAmount ? parseFloat(wonAmount) : null, // Add
-        paymentTerms, // Add
-        validityDays: validityDays ? parseInt(validityDays) : 30, // Add with default
+        wonAmount:
+          wonAmount === undefined || wonAmount === null || wonAmount === ""
+            ? null
+            : toSafeNumber(wonAmount), // Add
+        paymentTerms: cleanOptionalString(paymentTerms) || null, // Add
+        validityDays: parseOptionalInt(validityDays, 30), // Add with default
         workspaceId,
         roleRates: roleRates || null,
         materials: materials || null,
         items: {
-          create: items.map((item) => ({
-            description: item.description,
-            type: item.type || "service", // Add
-            estimatedHours: parseFloat(item.estimatedHours || 0),
-            suggestedRole: item.suggestedRole,
-            unit: item.unit || null, // Add
-            hourlyRate: parseFloat(item.hourlyRate || 0),
-            amount: parseFloat(item.amount || 0),
-          })),
+          create: normalizedItems,
         },
       },
       include: {
@@ -1274,6 +1408,12 @@ export async function updateQuote(req, res) {
     } = req.body;
 
     const workspaceId = req.workspace?.id;
+    if (!workspaceId) {
+      return res.status(400).json({
+        success: false,
+        message: "Workspace ID missing",
+      });
+    }
 
     // Verify ownership
     const existingQuote = await prisma.quote.findUnique({
@@ -1284,9 +1424,20 @@ export async function updateQuote(req, res) {
       return res.status(404).json({ message: "Quote not found" });
     }
 
+    const hasCustomerId = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "customerId",
+    );
+    const resolvedCustomerId = hasCustomerId
+      ? await resolveWorkspaceCustomerId(customerId, workspaceId)
+      : undefined;
+    const normalizedItems = Array.isArray(items)
+      ? normalizeQuoteItems(items)
+      : undefined;
+
     // Calculate total amount
-    const totalAmount = items
-      ? items.reduce((sum, item) => sum + (item.amount || 0), 0)
+    const totalAmount = normalizedItems
+      ? normalizedItems.reduce((sum, item) => sum + item.amount, 0)
       : existingQuote.totalAmount;
     const nextProposalStatus = resolveProposalStatusUpdate(
       proposalStatus,
@@ -1299,24 +1450,45 @@ export async function updateQuote(req, res) {
       const quote = await prisma.quote.update({
         where: { id },
         data: {
-          customerName,
-          customerId,
-          projectName,
-          projectType,
-          createdAt: createdAt ? new Date(createdAt) : undefined,
-          expectedDays: expectedDays ? parseInt(expectedDays) : undefined,
-          description,
+          customerName:
+            customerName !== undefined
+              ? cleanOptionalString(customerName) || "未命名客戶"
+              : undefined,
+          customerId: hasCustomerId ? resolvedCustomerId || null : undefined,
+          projectName:
+            projectName !== undefined
+              ? cleanOptionalString(projectName) || "未命名專案"
+              : undefined,
+          projectType:
+            projectType !== undefined
+              ? cleanOptionalString(projectType) || "general"
+              : undefined,
+          createdAt: normalizeCreatedAt(createdAt),
+          expectedDays:
+            expectedDays !== undefined
+              ? parseOptionalInt(expectedDays, null)
+              : undefined,
+          description:
+            description !== undefined
+              ? cleanOptionalString(description) || null
+              : undefined,
           status,
           proposalStatus: nextProposalStatus,
           totalAmount,
           wonAmount:
             wonAmount !== undefined
-              ? wonAmount
-                ? parseFloat(wonAmount)
-                : null
+              ? wonAmount === null || wonAmount === ""
+                ? null
+                : toSafeNumber(wonAmount)
               : undefined, // Add
-          paymentTerms, // Add
-          validityDays: validityDays ? parseInt(validityDays) : undefined, // Add
+          paymentTerms:
+            paymentTerms !== undefined
+              ? cleanOptionalString(paymentTerms) || null
+              : undefined, // Add
+          validityDays:
+            validityDays !== undefined
+              ? parseOptionalInt(validityDays, undefined)
+              : undefined, // Add
           roleRates: roleRates !== undefined ? roleRates : undefined, // Add
           materials: materials !== undefined ? materials : undefined, // Add
           proposalContent:
@@ -1326,27 +1498,21 @@ export async function updateQuote(req, res) {
       });
 
       // 2. If items provided, replace them
-      if (items && Array.isArray(items) && items.length > 0) {
+      if (normalizedItems) {
         // Delete existing items
         await prisma.quoteItem.deleteMany({
           where: { quoteId: id },
         });
 
         // Create new items - only extract necessary fields
-        await prisma.quoteItem.createMany({
-          data: items.map((item) => ({
-            quoteId: id,
-            description: item.description || "",
-            type: item.type || "service", // Add
-            estimatedHours: item.estimatedHours
-              ? parseFloat(item.estimatedHours)
-              : 0,
-            suggestedRole: item.suggestedRole || "",
-            unit: item.unit || null, // Add
-            hourlyRate: item.hourlyRate ? parseFloat(item.hourlyRate) : 0,
-            amount: item.amount ? parseFloat(item.amount) : 0,
-          })),
-        });
+        if (normalizedItems.length > 0) {
+          await prisma.quoteItem.createMany({
+            data: normalizedItems.map((item) => ({
+              quoteId: id,
+              ...item,
+            })),
+          });
+        }
       }
 
       return quote;
