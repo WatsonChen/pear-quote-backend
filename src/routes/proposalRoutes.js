@@ -1,3 +1,4 @@
+// src/routes/proposalRoutes.js
 import { Router } from "express";
 import {
   acceptProposal,

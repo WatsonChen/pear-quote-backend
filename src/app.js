@@ -51,6 +51,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use("/", baseRoutes);
 app.use("/api", authRoutes);
 app.use("/api/quotes", quoteRoutes);
+app.use("/api/proposals", proposalRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/users", userRoutes);
@@ -58,7 +59,6 @@ app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/payments", paymentRoutes);
-app.use("/api/proposals", proposalRoutes);
 
 // Swagger Documentation
 import swaggerUi from "swagger-ui-express";

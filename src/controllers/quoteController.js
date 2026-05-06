@@ -1,6 +1,45 @@
 import crypto from "node:crypto";
 import prisma from "../lib/prisma.js";
 
+const PROPOSAL_STATUSES = new Set([
+  "draft",
+  "sent",
+  "viewed",
+  "accepted",
+  "rejected",
+]);
+const TERMINAL_PROPOSAL_STATUSES = new Set(["accepted", "rejected"]);
+
+function normalizeProposalStatus(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return PROPOSAL_STATUSES.has(normalized) ? normalized : undefined;
+}
+
+function resolveProposalStatusUpdate(requestedStatus, existingStatus) {
+  const normalizedStatus = normalizeProposalStatus(requestedStatus);
+  if (!normalizedStatus) return undefined;
+
+  const existing = normalizeProposalStatus(existingStatus) || "draft";
+  if (normalizedStatus === existing) return normalizedStatus;
+  if (normalizedStatus === "sent" && existing !== "draft") {
+    return undefined;
+  }
+  if (normalizedStatus === "viewed" && existing !== "sent") {
+    return undefined;
+  }
+  if (normalizedStatus === "accepted") {
+    return undefined;
+  }
+  if (
+    TERMINAL_PROPOSAL_STATUSES.has(existing) &&
+    normalizedStatus !== "draft"
+  ) {
+    return undefined;
+  }
+
+  return normalizedStatus;
+}
+
 const PROPOSAL_CREDIT_COST = 15;
 
 function buildDefaultProposalContent(quote) {
@@ -1094,6 +1133,10 @@ export async function createQuote(req, res) {
         expectedDays: expectedDays ? parseInt(expectedDays) : null,
         description,
         status: "DRAFT",
+        shareToken: crypto.randomUUID(),
+        proposalStatus: normalizeProposalStatus(proposalStatus) || "draft",
+        proposalContent: proposalContent || null,
+        proposalTheme: proposalTheme || null,
         totalAmount,
         wonAmount: wonAmount ? parseFloat(wonAmount) : null, // Add
         paymentTerms, // Add
@@ -1225,6 +1268,9 @@ export async function updateQuote(req, res) {
       wonAmount, // Add - actual deal amount
       roleRates, // Add
       materials, // Add
+      proposalStatus,
+      proposalContent,
+      proposalTheme,
     } = req.body;
 
     const workspaceId = req.workspace?.id;
@@ -1242,6 +1288,10 @@ export async function updateQuote(req, res) {
     const totalAmount = items
       ? items.reduce((sum, item) => sum + (item.amount || 0), 0)
       : existingQuote.totalAmount;
+    const nextProposalStatus = resolveProposalStatusUpdate(
+      proposalStatus,
+      existingQuote.proposalStatus,
+    );
 
     // Transaction to update quote and replace items
     const updatedQuote = await prisma.$transaction(async (prisma) => {
@@ -1257,6 +1307,7 @@ export async function updateQuote(req, res) {
           expectedDays: expectedDays ? parseInt(expectedDays) : undefined,
           description,
           status,
+          proposalStatus: nextProposalStatus,
           totalAmount,
           wonAmount:
             wonAmount !== undefined
@@ -1268,8 +1319,6 @@ export async function updateQuote(req, res) {
           validityDays: validityDays ? parseInt(validityDays) : undefined, // Add
           roleRates: roleRates !== undefined ? roleRates : undefined, // Add
           materials: materials !== undefined ? materials : undefined, // Add
-          proposalStatus:
-            proposalStatus !== undefined ? proposalStatus : undefined,
           proposalContent:
             proposalContent !== undefined ? proposalContent : undefined,
           proposalTheme: proposalTheme !== undefined ? proposalTheme : undefined,

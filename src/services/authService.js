@@ -18,6 +18,7 @@ function buildAuthUser(user, workspace) {
     id: user.id,
     email: user.email,
     workspaceId: workspace.id,
+    bookingUrl: user.bookingUrl,
     termsAcceptedAt: user.termsAcceptedAt,
     termsVersionAccepted: user.termsVersionAccepted,
     currentTermsVersion: CURRENT_TERMS_VERSION,
@@ -141,6 +142,7 @@ export async function getUserById(userId) {
     select: {
       id: true,
       email: true,
+      bookingUrl: true,
       phoneNumber: true,
       termsAcceptedAt: true,
       termsVersionAccepted: true,

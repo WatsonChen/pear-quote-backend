@@ -278,6 +278,7 @@ export async function generateGeminiText(
     ? options.fallbackModelNames.filter(Boolean)
     : [];
   const responseMimeType = options.responseMimeType ?? null;
+  const temperature = options.temperature ?? null;
   const maxQueueWaitMs = options.maxQueueWaitMs ?? GEMINI_QUEUE_MAX_WAIT_MS;
   const candidateModelNames = Array.from(
     new Set([modelName, ...fallbackModelNames].filter(Boolean)),
@@ -311,8 +312,10 @@ export async function generateGeminiText(
         }
 
         const modelOptions = { model: candidateModelName };
-        if (responseMimeType) {
-          modelOptions.generationConfig = { responseMimeType };
+        if (responseMimeType || temperature !== null) {
+          modelOptions.generationConfig = {};
+          if (responseMimeType) modelOptions.generationConfig.responseMimeType = responseMimeType;
+          if (temperature !== null) modelOptions.generationConfig.temperature = temperature;
         }
 
         const model = geminiClient.getGenerativeModel(modelOptions);

@@ -1620,7 +1620,7 @@ ${normalizedRequirements || "No additional user-entered requirements."}
  */
 export async function roughEstimate(req, res) {
   try {
-    const { description, imageBase64, imageBase64List, images } = req.body;
+    const { description, imageBase64, imageBase64List, images, locale } = req.body;
     const normalizedDescription =
       typeof description === "string" ? description.trim() : "";
     const normalizedImageBase64List = [];
@@ -1647,7 +1647,12 @@ export async function roughEstimate(req, res) {
     }
 
     const hasImage = normalizedImageBase64List.length > 0;
-    const useChinese = hasChineseText(normalizedDescription);
+    // Prefer explicit locale from the request (set by the UI language choice);
+    // fall back to detecting Chinese characters in the description.
+    const normalizedLocale = typeof locale === "string" ? locale.trim().toLowerCase() : "";
+    const useChinese = normalizedLocale
+      ? normalizedLocale === "zh" || normalizedLocale.startsWith("zh-")
+      : hasChineseText(normalizedDescription);
     const quota = createRoughEstimateQuota(req);
 
     if (!normalizedDescription && !hasImage) {
@@ -1697,16 +1702,20 @@ export async function roughEstimate(req, res) {
       ),
     );
 
+    const outputLanguageInstruction = useChinese
+      ? "IMPORTANT: You MUST write ALL text fields (priceRange, timeline, confidence, confidenceHint, confidenceActions, breakdown labels and descriptions, assumptions, note) in Traditional Chinese (繁體中文). Do NOT use English in any of these fields. Use TWD (NT$) for prices."
+      : "Write all text fields in English. Use USD for prices unless the description clearly implies another currency.";
+
     const prompt = `
 You are a senior software project estimator. Analyze the following project description and produce a rough quote preview.
 Return ONLY a valid JSON object matching this exact schema — no markdown, no explanation.
 
 Schema:
 {
-  "priceRange": "string (e.g. '$4,800 – $7,500' or 'NT$150,000 – NT$235,000' based on locale hints)",
-  "timeline": "string (e.g. '4 – 6 weeks')",
+  "priceRange": "string (e.g. '$4,800 – $7,500' or 'NT$150,000 – NT$235,000')",
+  "timeline": "string (e.g. '4 – 6 weeks' or '4 – 6 週')",
   "confidenceScore": "number (integer 55-92)",
-  "confidence": "string (must include confidenceScore as percentage, e.g. 'Draft confidence 82%')",
+  "confidence": "string (must include confidenceScore as percentage, e.g. 'Draft confidence 82%' or '初步估計信心度 82%')",
   "confidenceHint": "string | null (one short sentence; null when confidence is high)",
   "confidenceActions": ["string", "string", "string"],
   "breakdown": [
@@ -1723,13 +1732,18 @@ Schema:
 Rules:
 - breakdown must have 3–5 items covering the major phases of the project.
 - assumptions must have exactly 3 items.
-- Use the same language as the user's description (English or Chinese).
+- ${outputLanguageInstruction}
 - Keep breakdown labels concise and professional.
-- Price should reflect typical freelance/agency rates for the region implied by the description language (TWD for Chinese, USD for English).
 - confidenceScore must be based on requirement clarity and uncertainty, not a default value.
 - increase confidenceScore when scope is specific (clear features, constraints, stack, deliverables).
 - decrease confidenceScore when scope is vague, highly complex, or missing key constraints.
 - do not reuse the same confidence score across unrelated inputs unless the information quality is genuinely similar.
+- STANDARD PRICING BASELINE (adjust based on detailed requirements):
+  * Simple landing page / Website: $1,500 - $3,500 (NT$45,000 - NT$105,000)
+  * Basic Web App / CMS: $4,000 - $8,000 (NT$120,000 - NT$240,000)
+  * Complex Platform / SaaS: $10,000+ (NT$300,000+)
+  * E-commerce site: $5,000 - $12,000 (NT$150,000 - NT$360,000)
+  * Use these as a firm anchor to prevent wild price fluctuations between similar inputs. Keep the estimated ranges consistent and stable.
 - confidenceHint must be concise and practical.
 - confidenceActions must be concrete next inputs the user can add, not generic advice.
 - if confidenceScore >= 82: set confidenceHint to null and confidenceActions to [].
@@ -1752,6 +1766,7 @@ ${normalizedDescription || "(see attached images)"}
         modelName,
         fallbackModelNames,
         maxQueueWaitMs: ROUGH_ESTIMATE_QUEUE_WAIT_MS,
+        temperature: 0.1, // Added lower temperature to reduce price fluctuation
       });
     } catch (error) {
       const statusCode = extractGeminiStatusCode(error);

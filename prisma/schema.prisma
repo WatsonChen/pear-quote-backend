@@ -69,11 +69,11 @@ model Quote {
   workspaceId  String
   materials    Json?
   roleRates    Json?
-  shareToken   String?
-  proposalStatus String    @default("draft")
+  shareToken   String      @unique @default(uuid())
   shareViewedAt DateTime?
   lastViewedAt DateTime?
   viewCount    Int         @default(0)
+  proposalStatus String    @default("draft")
   acceptedAt   DateTime?
   clientResponseName String?
   clientResponseEmail String?
@@ -150,5 +150,6 @@ model User {
   phoneNumber          String?         @unique
   termsAcceptedAt      DateTime?
   termsVersionAccepted String?
+  bookingUrl           String?
   workspaces           WorkspaceUser[]
 }
