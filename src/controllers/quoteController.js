@@ -187,6 +187,11 @@ function parseOptionalInt(value, fallback = null) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+function normalizeGenerationType(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "proposal" ? "proposal" : "quote";
+}
+
 function normalizeQuoteItems(items) {
   if (!Array.isArray(items)) return [];
 
@@ -205,6 +210,19 @@ function normalizeQuoteItems(items) {
       suggestedRole: cleanOptionalString(item?.suggestedRole),
       unit: cleanOptionalString(item?.unit) || null,
       hourlyRate,
+      aiSuggestedHourlyRate:
+        item?.aiSuggestedHourlyRate === undefined ||
+        item?.aiSuggestedHourlyRate === null ||
+        item?.aiSuggestedHourlyRate === ""
+          ? null
+          : toSafeNumber(item.aiSuggestedHourlyRate),
+      configuredHourlyRate:
+        item?.configuredHourlyRate === undefined ||
+        item?.configuredHourlyRate === null ||
+        item?.configuredHourlyRate === ""
+          ? null
+          : toSafeNumber(item.configuredHourlyRate),
+      rateSource: cleanOptionalString(item?.rateSource) || null,
       amount,
     };
   });
@@ -1213,6 +1231,226 @@ function buildQuoteExportWorkbook(model) {
   ]);
 }
 
+function truncateText(value, max = 160) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function normalizeProposalArray(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object") {
+          return [item.title || item.label || item.name, item.detail || item.description || item.body]
+            .filter(Boolean)
+            .join("：");
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+
+  return String(value || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function buildFallbackProposalSlides(quote) {
+  const content = quote.proposalContent || buildDefaultProposalContent(quote);
+  const items = Array.isArray(quote.items) ? quote.items : [];
+  const totalAmount = items.reduce((sum, item) => sum + toSafeNumber(item.amount), 0);
+  const milestones = normalizeProposalArray(content.milestones);
+
+  return [
+    {
+      title: content.coverTitle || quote.projectName || "專案提案",
+      subtitle: content.subtitle || quote.description || "",
+      bullets: [
+        totalAmount ? `報價建議：NT$ ${Math.round(totalAmount).toLocaleString("en-US")} 未稅` : "",
+        quote.expectedDays ? `預估期程：${quote.expectedDays} 天` : "",
+        content.paymentTerms || quote.paymentTerms || "",
+      ].filter(Boolean),
+    },
+    {
+      title: "需求洞察與價值對齊",
+      subtitle: "我們深入理解了您的需求",
+      bullets: [
+        content.requirementUnderstanding || quote.description,
+        content.solution,
+      ].filter(Boolean),
+    },
+    {
+      title: "核心方案與執行策略",
+      subtitle: "依報價項目整理的執行範圍",
+      bullets: items.map((item) => item.description).filter(Boolean).slice(0, 8),
+    },
+    {
+      title: "資源投入與報價摘要",
+      subtitle: totalAmount ? `總計 NT$ ${Math.round(totalAmount).toLocaleString("en-US")} 未稅` : "",
+      bullets: items
+        .map((item) => `${item.description}｜NT$ ${Math.round(toSafeNumber(item.amount)).toLocaleString("en-US")}`)
+        .slice(0, 8),
+    },
+    {
+      title: "里程碑與交付時程",
+      subtitle: "清晰的推進節點",
+      bullets: milestones.length ? milestones : ["需求對齊", "執行製作", "驗收交付"],
+    },
+    {
+      title: "合作保障與下一步",
+      subtitle: content.nextSteps || "確認提案內容後，我們將安排啟動會議。",
+      bullets: normalizeProposalArray(content.excluded).map((item) => `不包含：${item}`),
+    },
+  ];
+}
+
+function getProposalSlides(quote) {
+  const content = quote.proposalContent || {};
+  if (Array.isArray(content.slides) && content.slides.length > 0) {
+    return content.slides.map((slide) => ({
+      title: slide.title || slide.coverTitle || quote.projectName || "專案提案",
+      subtitle: slide.subtitle || "",
+      bullets: normalizeProposalArray(slide.bullets || slide.points || slide.items),
+    }));
+  }
+
+  return buildFallbackProposalSlides(quote);
+}
+
+function pptTextRun(text, options = {}) {
+  const size = options.size || 2200;
+  const color = options.color || "2F2F2F";
+  const bold = options.bold ? "<a:b/>" : "";
+  return `<a:r><a:rPr lang="zh-TW" sz="${size}" dirty="0">${bold}<a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:rPr><a:t>${xmlEscape(text)}</a:t></a:r>`;
+}
+
+function pptTextBox(id, x, y, cx, cy, paragraphs, options = {}) {
+  const paragraphXml = paragraphs
+    .filter((paragraph) => paragraph !== null && paragraph !== undefined && String(paragraph).trim())
+    .map((paragraph) => {
+      const text = typeof paragraph === "string" ? paragraph : paragraph.text;
+      const runOptions = typeof paragraph === "string" ? options : { ...options, ...paragraph };
+      return `<a:p>${pptTextRun(text, runOptions)}<a:endParaRPr lang="zh-TW" sz="${runOptions.size || options.size || 2200}"/></a:p>`;
+    })
+    .join("");
+
+  return `<p:sp>
+    <p:nvSpPr><p:cNvPr id="${id}" name="TextBox ${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
+    <p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr>
+    <p:txBody><a:bodyPr wrap="square" rtlCol="0"/><a:lstStyle/>${paragraphXml}</p:txBody>
+  </p:sp>`;
+}
+
+function pptShape(id, x, y, cx, cy, fill = "F6F4EF", line = "D8CDBE") {
+  return `<p:sp>
+    <p:nvSpPr><p:cNvPr id="${id}" name="Shape ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+    <p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="${fill}"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="${line}"/></a:solidFill></a:ln></p:spPr>
+  </p:sp>`;
+}
+
+function buildPptSlideXml(slide, index, quote) {
+  const bullets = normalizeProposalArray(slide.bullets).slice(0, 9);
+  const isCover = index === 0;
+  const shapes = [];
+  let id = 2;
+
+  shapes.push(pptShape(id++, 0, 0, 12192000, 6858000, isCover ? "F3F1EC" : "FAF9F6", "F3F1EC"));
+  shapes.push(pptTextBox(id++, 420000, 260000, 7200000, 360000, [
+    { text: "PEARQUOTE PROPOSAL", size: 1150, color: "9C8F7B", bold: true },
+  ]));
+  shapes.push(pptTextBox(id++, 420000, isCover ? 1120000 : 760000, 10600000, isCover ? 1450000 : 940000, [
+    { text: truncateText(slide.title || quote.projectName || "專案提案", 52), size: isCover ? 4200 : 3300, color: "242424", bold: true },
+  ]));
+
+  if (slide.subtitle) {
+    shapes.push(pptTextBox(id++, 450000, isCover ? 2520000 : 1620000, 9800000, 720000, [
+      { text: truncateText(slide.subtitle, isCover ? 96 : 120), size: isCover ? 1900 : 1550, color: "5F5F5F" },
+    ]));
+  }
+
+  if (isCover) {
+    const meta = [
+      quote.customerName ? `提案對象：${quote.customerName}` : "",
+      quote.totalAmount ? `投資總額：NT$ ${Math.round(toSafeNumber(quote.totalAmount)).toLocaleString("en-US")}` : "",
+      quote.expectedDays ? `預估工期：${quote.expectedDays} 天` : "",
+    ].filter(Boolean);
+    shapes.push(pptTextBox(id++, 450000, 3980000, 10300000, 900000, meta.map((text) => ({ text, size: 1700, color: "6D6254", bold: true }))));
+  } else {
+    const bulletParagraphs = bullets.map((bullet) => ({
+      text: `• ${truncateText(bullet, 110)}`,
+      size: 1550,
+      color: "404040",
+    }));
+    shapes.push(pptTextBox(id++, 760000, 2500000, 10100000, 3300000, bulletParagraphs));
+  }
+
+  shapes.push(pptTextBox(id++, 11100000, 6200000, 650000, 250000, [
+    { text: String(index + 1).padStart(2, "0"), size: 1100, color: "9C8F7B", bold: true },
+  ]));
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld><p:spTree>
+    <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+    <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
+    ${shapes.join("\n")}
+  </p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>
+</p:sld>`;
+}
+
+function buildProposalPptx(quote) {
+  const slides = getProposalSlides(quote).slice(0, 14);
+  const slideIds = slides
+    .map((_, index) => `<p:sldId id="${256 + index}" r:id="rId${index + 2}"/>`)
+    .join("");
+  const slideRelationships = slides
+    .map((_, index) => `<Relationship Id="rId${index + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${index + 1}.xml"/>`)
+    .join("");
+  const slideOverrides = slides
+    .map((_, index) => `<Override PartName="/ppt/slides/slide${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`)
+    .join("");
+
+  const presentationXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:sldSz cx="12192000" cy="6858000" type="screen16x9"/>
+  <p:notesSz cx="6858000" cy="9144000"/>
+  <p:sldIdLst>${slideIds}</p:sldIdLst>
+</p:presentation>`;
+  const presentationRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
+  ${slideRelationships}
+</Relationships>`;
+  const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`;
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
+  ${slideOverrides}
+</Types>`;
+  const themeXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="PearQuote"><a:themeElements><a:clrScheme name="PearQuote"><a:dk1><a:srgbClr val="242424"/></a:dk1><a:lt1><a:srgbClr val="FAF9F6"/></a:lt1><a:dk2><a:srgbClr val="6D6254"/></a:dk2><a:lt2><a:srgbClr val="F3F1EC"/></a:lt2><a:accent1><a:srgbClr val="9C8F7B"/></a:accent1><a:accent2><a:srgbClr val="0F766E"/></a:accent2><a:accent3><a:srgbClr val="D8CDBE"/></a:accent3><a:accent4><a:srgbClr val="404040"/></a:accent4><a:accent5><a:srgbClr val="FFFFFF"/></a:accent5><a:accent6><a:srgbClr val="111827"/></a:accent6><a:hlink><a:srgbClr val="0F766E"/></a:hlink><a:folHlink><a:srgbClr val="6D6254"/></a:folHlink></a:clrScheme><a:fontScheme name="PearQuote"><a:majorFont><a:latin typeface="Aptos Display"/><a:ea typeface="Microsoft JhengHei"/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/><a:ea typeface="Microsoft JhengHei"/></a:minorFont></a:fontScheme><a:fmtScheme name="PearQuote"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`;
+
+  return createStoredZip([
+    { name: "[Content_Types].xml", data: contentTypesXml },
+    { name: "_rels/.rels", data: rootRelsXml },
+    { name: "ppt/presentation.xml", data: presentationXml },
+    { name: "ppt/_rels/presentation.xml.rels", data: presentationRelsXml },
+    { name: "ppt/theme/theme1.xml", data: themeXml },
+    ...slides.map((slide, index) => ({
+      name: `ppt/slides/slide${index + 1}.xml`,
+      data: buildPptSlideXml(slide, index, quote),
+    })),
+  ]);
+}
+
 /**
  * Create a new quote with items
  * POST /api/quotes
@@ -1224,6 +1462,7 @@ export async function createQuote(req, res) {
       customerId,
       projectName,
       projectType,
+      generationType,
       createdAt,
       expectedDays,
       description,
@@ -1268,6 +1507,7 @@ export async function createQuote(req, res) {
         ...(resolvedCustomerId ? { customerId: resolvedCustomerId } : {}),
         projectName: cleanOptionalString(projectName) || "未命名專案",
         projectType: cleanOptionalString(projectType) || "general",
+        generationType: normalizeGenerationType(generationType),
         createdAt: normalizeCreatedAt(createdAt),
         expectedDays: parseOptionalInt(expectedDays, null),
         description: cleanOptionalString(description) || null,
@@ -1392,6 +1632,7 @@ export async function updateQuote(req, res) {
       customerId,
       projectName,
       projectType,
+      generationType,
       createdAt,
       expectedDays,
       description,
@@ -1462,6 +1703,10 @@ export async function updateQuote(req, res) {
           projectType:
             projectType !== undefined
               ? cleanOptionalString(projectType) || "general"
+              : undefined,
+          generationType:
+            generationType !== undefined
+              ? normalizeGenerationType(generationType)
               : undefined,
           createdAt: normalizeCreatedAt(createdAt),
           expectedDays:
@@ -1571,7 +1816,7 @@ export async function deleteQuote(req, res) {
 }
 
 /**
- * Export quote as a spreadsheet-friendly CSV file
+ * Export quote as CSV, Excel, or PPTX
  * POST /api/quotes/:id/export
  */
 export async function exportQuote(req, res) {
@@ -1587,7 +1832,7 @@ export async function exportQuote(req, res) {
         .json({ success: false, message: "Workspace not found" });
     }
 
-    if (format !== "excel" && format !== "csv") {
+    if (format !== "excel" && format !== "csv" && format !== "pptx") {
       return res.status(400).json({
         success: false,
         message: "Unsupported export format",
@@ -1620,6 +1865,28 @@ export async function exportQuote(req, res) {
     const filenameBase = exportModel.filenameBase;
 
     res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+
+    if (format === "pptx") {
+      const quoteTotalAmount =
+        quote.totalAmount ??
+        quote.items.reduce((sum, item) => sum + toSafeNumber(item.amount), 0);
+      const pptxBuffer = buildProposalPptx({
+        ...quote,
+        totalAmount: quoteTotalAmount,
+      });
+      const filename = `${sanitizeFilenamePart(
+        quote.projectName || quote.customerName || quote.id,
+      )}-proposal.pptx`;
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      );
+      return res.status(200).send(pptxBuffer);
+    }
 
     if (format === "csv") {
       const csv = buildQuoteExportCsv(exportModel);
@@ -1712,6 +1979,7 @@ export async function generateQuote(req, res) {
           proposalStatus: quote.proposalStatus || "draft",
           proposalContent:
             quote.proposalContent || buildDefaultProposalContent(quote),
+          generationType: "proposal",
           proposalTheme:
             quote.proposalTheme || {
               preset: "Professional",

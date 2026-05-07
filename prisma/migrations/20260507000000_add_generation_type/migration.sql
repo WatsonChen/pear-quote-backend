@@ -1,0 +1,1 @@
+ALTER TABLE "Quote" ADD COLUMN IF NOT EXISTS "generationType" TEXT NOT NULL DEFAULT 'quote';

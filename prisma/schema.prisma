@@ -57,6 +57,7 @@ model Quote {
   expectedDays Int?
   projectName  String
   projectType  String
+  generationType String     @default("quote")
   status       String      @default("DRAFT")
   totalAmount  Float?
   updatedAt    DateTime    @updatedAt
@@ -109,6 +110,9 @@ model QuoteItem {
   estimatedHours Float?
   suggestedRole  String?
   hourlyRate     Float
+  aiSuggestedHourlyRate Float?
+  configuredHourlyRate Float?
+  rateSource     String?
   amount         Float
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
