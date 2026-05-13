@@ -4,6 +4,7 @@ const DEFAULT_MODEL_NAME = "gemini-2.0-flash";
 const DEFAULT_ROUGH_ESTIMATE_MODEL_NAME = "gemini-2.0-flash";
 const DEFAULT_ANALYZE_MODEL_NAME = "gemini-2.0-flash";
 const DEFAULT_ANALYTICS_MODEL_NAME = "gemini-2.0-flash";
+const DEFAULT_REFINE_ROUGH_MODEL_NAME = "gemini-2.5-pro";
 const GEMINI_RETRY_DELAYS_MS = [450, 900];
 const GEMINI_QUEUE_GAP_MS = readPositiveIntEnv("GEMINI_QUEUE_GAP_MS", 900);
 const GEMINI_QUEUE_MAX_WAIT_MS = readPositiveIntEnv(
@@ -89,6 +90,10 @@ export function getGeminiModelName(purpose = "default") {
       process.env.GEMINI_ANALYTICS_MODEL?.trim() ??
       sharedModel ??
       DEFAULT_ANALYTICS_MODEL_NAME,
+    refineRough:
+      process.env.GEMINI_REFINE_ROUGH_MODEL?.trim() ??
+      sharedModel ??
+      DEFAULT_REFINE_ROUGH_MODEL_NAME,
     default: sharedModel ?? DEFAULT_MODEL_NAME,
   };
 

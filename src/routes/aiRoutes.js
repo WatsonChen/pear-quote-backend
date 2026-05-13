@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   analyzeRequirements,
   refineQuote,
+  refineRoughEstimate,
   roughEstimate,
   translateQuote,
 } from "../controllers/aiController.js";
@@ -18,5 +19,6 @@ router.use(authMiddleware);
 router.post("/analyze", analyzeRequirements);
 router.post("/translate-quote", translateQuote);
 router.post("/refine-quote", refineQuote);
+router.post("/refine-rough-estimate", refineRoughEstimate);
 
 export default router;

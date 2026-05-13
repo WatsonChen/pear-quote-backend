@@ -2324,6 +2324,11 @@ export async function roughEstimate(req, res) {
       ? "IMPORTANT: You MUST write ALL text fields (priceRange, timeline, confidence, confidenceHint, confidenceActions, breakdown labels and descriptions, assumptions, note) in Traditional Chinese (繁體中文). Do NOT use English in any of these fields. Use TWD (NT$) for prices."
       : "Write all text fields in English. Use USD for prices unless the description clearly implies another currency.";
 
+    const hasImages = normalizedImageBase64List.length > 0;
+    const imageSummaryField = hasImages
+      ? `  "imageSummary": "string (one paragraph describing the visual content of the attached images — list every module, feature, platform, and technology you can see; null if no images)"`
+      : `  "imageSummary": null`;
+
     const prompt = `
 You are a senior software project estimator. Analyze the following project description and produce a rough quote preview.
 Return ONLY a valid JSON object matching this exact schema — no markdown, no explanation.
@@ -2344,7 +2349,8 @@ Schema:
     }
   ],
   "assumptions": ["string", "string", "string"],
-  "note": "string (one short disclaimer sentence)"
+  "note": "string (one short disclaimer sentence)",
+${imageSummaryField}
 }
 
 Rules:
@@ -2352,6 +2358,7 @@ Rules:
 - assumptions must have exactly 3 items.
 - ${outputLanguageInstruction}
 - Keep breakdown labels concise and professional.
+- breakdown descriptions MUST name specific technologies, platforms, and integrations — e.g. "FB/IG/TikTok API", "HeyGen", "RAG 知識庫", "Stripe", "代理 IP 池". Generic phase names like "後端開發" alone are not acceptable; always state what is being built and with which tools.
 - confidenceScore must be based on requirement clarity and uncertainty, not a default value.
 - increase confidenceScore when scope is specific (clear features, constraints, stack, deliverables).
 - decrease confidenceScore when scope is vague, highly complex, or missing key constraints.
@@ -2458,6 +2465,109 @@ ${normalizedDescription || "(see attached images)"}
     return res.status(500).json({
       success: false,
       message: "Failed to generate rough estimate",
+      errorCode: "AI_INTERNAL_ERROR",
+      apiKeyPresent: hasGeminiApiKey(),
+    });
+  }
+}
+
+/**
+ * Refine a rough estimate into a detailed breakdown using a Pro model.
+ * Called in the background when the user reaches the admin quote page.
+ * POST /api/ai/refine-rough-estimate
+ */
+export async function refineRoughEstimate(req, res) {
+  try {
+    const { description, imageSummary, flashBreakdown, locale } = req.body;
+
+    const normalizedDescription = typeof description === "string" ? description.trim() : "";
+    const normalizedImageSummary = typeof imageSummary === "string" ? imageSummary.trim() : "";
+    const normalizedLocale = typeof locale === "string" ? locale.trim().toLowerCase() : "";
+    const useChinese = normalizedLocale
+      ? normalizedLocale === "zh" || normalizedLocale.startsWith("zh-")
+      : hasChineseText(normalizedDescription) || hasChineseText(normalizedImageSummary);
+
+    if (!normalizedDescription && !normalizedImageSummary) {
+      return res.status(400).json({
+        success: false,
+        message: "description or imageSummary required",
+      });
+    }
+
+    if (!Array.isArray(flashBreakdown) || flashBreakdown.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "flashBreakdown is required",
+      });
+    }
+
+    const modelName = getGeminiModelName("refineRough");
+    const outputLanguageInstruction = useChinese
+      ? "You MUST write ALL text fields in Traditional Chinese (繁體中文). Use TWD (NT$) for prices."
+      : "Write all text fields in English. Use USD for prices.";
+
+    const flashBreakdownText = flashBreakdown
+      .map((item) => `- ${item.label}: ${item.description} (${item.effort})`)
+      .join("\n");
+
+    const contextBlock = [
+      normalizedDescription && `Project description:\n${normalizedDescription}`,
+      normalizedImageSummary && `Visual content summary (from uploaded images):\n${normalizedImageSummary}`,
+      `Flash rough breakdown (use as starting reference, not final answer):\n${flashBreakdownText}`,
+    ].filter(Boolean).join("\n\n");
+
+    const prompt = `
+You are a senior software architect producing a detailed project estimate.
+${contextBlock}
+
+Your task: produce a refined breakdown with 4–8 line items.
+Return ONLY a valid JSON object — no markdown, no explanation.
+
+Schema:
+{
+  "breakdown": [
+    {
+      "label": "string (concise phase or module name, max 6 words)",
+      "description": "string (one sentence; MUST name the specific technologies, platforms, APIs, or integrations involved)",
+      "effort": "string (e.g. '40–60h')",
+      "role": "frontend" | "backend" | "design" | "pm"
+    }
+  ]
+}
+
+Rules:
+- ${outputLanguageInstruction}
+- Each description MUST include specific tech names (e.g. FB Graph API, HeyGen SDK, RAG / Pinecone, Stripe, 代理 IP 池, TikTok API). Generic labels alone (e.g. "後端開發") are not acceptable.
+- Assign role accurately: frontend = UI/React, backend = API/DB/integrations, design = UX/visual, pm = planning/QA/deployment.
+- Effort must reflect real engineering complexity. Multi-platform integrations or AI pipelines should each be at least 40–80h.
+- Do not copy the Flash breakdown verbatim; improve specificity and split vague items if needed.
+- Total effort should be realistic for the full scope described.
+`.trim();
+
+    const text = await generateGeminiJsonText(geminiClient, [{ text: prompt }], {
+      modelName,
+      temperature: 0.15,
+    });
+
+    const cleaned = normalizeJsonResponse(text);
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      console.error("refineRoughEstimate JSON parse failed:", e, cleaned);
+      return res.status(500).json({ success: false, message: "Failed to parse AI response" });
+    }
+
+    if (!Array.isArray(parsed?.breakdown)) {
+      return res.status(500).json({ success: false, message: "Invalid AI response structure" });
+    }
+
+    return res.json({ breakdown: parsed.breakdown });
+  } catch (error) {
+    console.error("refineRoughEstimate error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to refine estimate",
       errorCode: "AI_INTERNAL_ERROR",
       apiKeyPresent: hasGeminiApiKey(),
     });
