@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   analyzeRequirements,
+  refineProposalSection,
   refineQuote,
   refineRoughEstimate,
   roughEstimate,
@@ -19,6 +20,7 @@ router.use(authMiddleware);
 router.post("/analyze", analyzeRequirements);
 router.post("/translate-quote", translateQuote);
 router.post("/refine-quote", refineQuote);
+router.post("/refine-proposal-section", refineProposalSection);
 router.post("/refine-rough-estimate", refineRoughEstimate);
 
 export default router;

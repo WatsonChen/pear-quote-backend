@@ -1824,6 +1824,222 @@ ${JSON.stringify(sourcePayload, null, 2)}
 }
 
 /**
+ * Refine a single proposal section/slide with AI.
+ * POST /api/ai/refine-proposal-section
+ *
+ * Body: { quoteId, slide: { title, subtitle, bullets }, instruction }
+ * Returns: { success, slide: { title, subtitle, bullets } }
+ *
+ * Unlike refineQuote, this does NOT create a quote copy — it just returns
+ * a refined slide payload for the client to merge into proposalContent.slides.
+ */
+export async function refineProposalSection(req, res) {
+  try {
+    const { quoteId, slide, instruction } = req.body || {};
+    const workspaceId = req.workspace?.id;
+    const creditCost = 1;
+
+    if (!workspaceId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Workspace not found" });
+    }
+
+    if (req.isFallbackWorkspace) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Unable to verify current workspace ID. Please select a workspace.",
+        errorCode: "WORKSPACE_ID_MISSING",
+      });
+    }
+
+    if (!quoteId || !slide || typeof slide !== "object") {
+      return res.status(400).json({
+        success: false,
+        message: "quoteId and slide are required",
+      });
+    }
+
+    const sourceTitle = typeof slide.title === "string" ? slide.title : "";
+    const sourceSubtitle = typeof slide.subtitle === "string" ? slide.subtitle : "";
+    const sourceBullets = Array.isArray(slide.bullets)
+      ? slide.bullets
+          .map((b) => (typeof b === "string" ? b.trim() : ""))
+          .filter(Boolean)
+      : [];
+
+    if (!sourceTitle && sourceBullets.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "slide.title or slide.bullets must contain content",
+      });
+    }
+
+    const [workspace, quote] = await Promise.all([
+      prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { creditBalance: true },
+      }),
+      prisma.quote.findUnique({
+        where: { id: quoteId },
+        select: {
+          id: true,
+          workspaceId: true,
+          projectName: true,
+          description: true,
+          proposalContent: true,
+        },
+      }),
+    ]);
+
+    if (!workspace) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Workspace does not exist" });
+    }
+
+    if (workspace.creditBalance < creditCost) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient credits. Please top up your account.",
+        errorCode: "INSUFFICIENT_CREDITS",
+      });
+    }
+
+    if (!quote || quote.workspaceId !== workspaceId) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quote not found" });
+    }
+
+    const geminiClient = getGeminiClient();
+    if (!geminiClient) {
+      return res.status(500).json({
+        success: false,
+        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
+      });
+    }
+
+    const proposalContext = quote.proposalContent || {};
+    const cleanInstruction =
+      typeof instruction === "string" ? instruction.trim() : "";
+
+    const prompt = `
+You are refining ONE section of a Traditional Chinese (Taiwan) business proposal.
+Return the result EXCLUSIVELY as a valid JSON object.
+
+JSON structure:
+{
+  "title": "string",
+  "subtitle": "string",
+  "bullets": ["string", "string"]
+}
+
+Rules:
+- Output language: Traditional Chinese (Taiwan) (繁體中文).
+- Keep the section's purpose and topic the same. Do not invent unrelated content.
+- Title should remain concise; subtitle is optional (may be empty string).
+- Provide 3-6 bullets, each a complete, readable sentence or phrase.
+- Preserve any concrete numbers, percentages, or module IDs (e.g. M1, M2) from the source.
+- If the user instruction contradicts the section's purpose, prefer the section's purpose and only apply the instruction where reasonable.
+
+Project context (for tone alignment, do not copy verbatim):
+- Project name: ${quote.projectName || "(未命名)"}
+- Project summary: ${proposalContext.executiveSummary || quote.description || "(no summary)"}
+- Project positioning: ${proposalContext.positioning || "(no positioning)"}
+
+Current section:
+${JSON.stringify({ title: sourceTitle, subtitle: sourceSubtitle, bullets: sourceBullets }, null, 2)}
+
+User instruction (may be empty — if empty, improve clarity and impact while keeping topic):
+${cleanInstruction || "(no specific instruction — improve clarity, structure, and persuasive impact)"}
+`;
+
+    let text;
+    try {
+      const modelName = getGeminiModelName("analyze");
+      const fallbackModelNames = buildAnalyzeFallbackModelNames();
+      text = await generateGeminiJsonText(
+        geminiClient,
+        [{ text: prompt }],
+        {
+          modelName,
+          fallbackModelNames,
+          maxQueueWaitMs: REFINE_QUEUE_WAIT_MS,
+        },
+      );
+    } catch (error) {
+      const statusCode = extractGeminiStatusCode(error);
+      const retryAfterSeconds = extractGeminiRetryAfterSeconds(
+        error,
+        DEFAULT_AI_RETRY_AFTER_SECONDS,
+      );
+
+      if (statusCode === 429) {
+        res.set("Retry-After", String(retryAfterSeconds));
+        return res.status(429).json({
+          success: false,
+          message: getBusyMessage(true, retryAfterSeconds),
+          errorCode: "AI_RATE_LIMIT",
+          retryAfterSeconds,
+        });
+      }
+
+      if (isGeminiRetryableStatus(statusCode)) {
+        return res.status(503).json({
+          success: false,
+          message: getUnavailableMessage(true),
+          errorCode: "AI_TEMP_UNAVAILABLE",
+        });
+      }
+
+      throw error;
+    }
+
+    const parsedResult = parseAiJsonPayload(text, "proposal section refinement");
+    const refinedTitle =
+      typeof parsedResult?.title === "string" && parsedResult.title.trim()
+        ? parsedResult.title.trim()
+        : sourceTitle;
+    const refinedSubtitle =
+      typeof parsedResult?.subtitle === "string"
+        ? parsedResult.subtitle.trim()
+        : sourceSubtitle;
+    const refinedBullets = Array.isArray(parsedResult?.bullets)
+      ? parsedResult.bullets
+          .map((b) => (typeof b === "string" ? b.trim() : ""))
+          .filter(Boolean)
+      : sourceBullets;
+
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        creditBalance: {
+          decrement: creditCost,
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      slide: {
+        title: refinedTitle,
+        subtitle: refinedSubtitle,
+        bullets: refinedBullets,
+      },
+    });
+  } catch (error) {
+    console.error("refineProposalSection error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to refine proposal section",
+      error: error.message,
+    });
+  }
+}
+
+/**
  * Analyze requirements using AI
  * POST /api/ai/analyze
  */
