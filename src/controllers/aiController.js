@@ -138,6 +138,104 @@ function normalizeProposalTimeline(value, expectedDays) {
   ];
 }
 
+function normalizePaymentMilestones(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return [
+      { stage: "簽約訂金", percentage: 30, trigger: "合約簽署 + 開工" },
+      { stage: "UI/UX + 系統規劃確認", percentage: 20, trigger: "設計稿與架構文件 sign-off" },
+      { stage: "開發中期里程碑", percentage: 20, trigger: "三大核心模組完成 + demo" },
+      { stage: "UAT 啟動", percentage: 15, trigger: "測試環境 + 內測通過 + 業主收件" },
+      { stage: "驗收通過", percentage: 10, trigger: "雙方簽署驗收同意書" },
+      { stage: "保固期半程", percentage: 5, trigger: "上線後 3 個月無重大未解 bug" },
+    ];
+  }
+  return value
+    .map((item) => {
+      if (typeof item === "string") {
+        const match = item.match(/^(.+?)[:：](.+)$/);
+        return match
+          ? { stage: match[1].trim(), percentage: null, trigger: match[2].trim() }
+          : { stage: item.trim(), percentage: null, trigger: "" };
+      }
+      return {
+        stage: normalizeProposalText(item.stage || item.title || item.name, "付款階段"),
+        percentage: typeof item.percentage === "number" ? item.percentage : null,
+        trigger: normalizeProposalText(item.trigger || item.condition || item.detail),
+      };
+    })
+    .filter((m) => m.stage);
+}
+
+function normalizeTestingCategories(value) {
+  if (!Array.isArray(value) || value.length === 0) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return { name: item.trim(), description: "" };
+      return {
+        name: normalizeProposalText(item.name || item.title, "測試項目"),
+        description: normalizeProposalText(item.description || item.detail),
+      };
+    })
+    .filter((t) => t.name);
+}
+
+function normalizeUatSteps(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return [
+      { title: "我方內測", duration: "5–7 天", responsible: "我方" },
+      { title: "提供測試環境", duration: "3 工作天簽收", responsible: "雙方" },
+      { title: "業主 UAT 第 1 回合", duration: "14 自然日", responsible: "業主" },
+      { title: "問題分類確認", duration: "5 工作天", responsible: "雙方" },
+      { title: "修正期", duration: "每 10 項 = 3 工作天", responsible: "我方" },
+      { title: "業主 UAT 第 2 回合", duration: "7 自然日", responsible: "業主" },
+      { title: "正式部署", duration: "1–2 天", responsible: "我方" },
+      { title: "文件與訓練", duration: "2–3 天", responsible: "雙方" },
+    ];
+  }
+  return value
+    .map((item) => {
+      if (typeof item === "string") return { title: item.trim(), duration: "", responsible: "" };
+      return {
+        title: normalizeProposalText(item.title || item.step || item.stage, "UAT 階段"),
+        duration: normalizeProposalText(item.duration || item.period),
+        responsible: normalizeProposalText(item.responsible || item.party),
+      };
+    })
+    .filter((s) => s.title);
+}
+
+function normalizeMaintenanceTiers(value) {
+  const defaults = [
+    { tier: "Basic", monthlyFee: "", hoursPool: "8 h / 月", regularSla: "5 工作天", criticalSla: "2 工作天" },
+    { tier: "Standard", monthlyFee: "", hoursPool: "16 h / 月", regularSla: "3 工作天", criticalSla: "1 工作天" },
+    { tier: "Premium", monthlyFee: "", hoursPool: "32 h / 月", regularSla: "1 工作天", criticalSla: "4 工時" },
+  ];
+  if (!Array.isArray(value) || value.length === 0) return defaults;
+  return value
+    .map((item) => ({
+      tier: normalizeProposalText(item.tier || item.name, "方案"),
+      monthlyFee: normalizeProposalText(item.monthlyFee || item.price || item.fee),
+      hoursPool: normalizeProposalText(item.hoursPool || item.hours),
+      regularSla: normalizeProposalText(item.regularSla || item.sla),
+      criticalSla: normalizeProposalText(item.criticalSla || item.criticalSLA),
+    }))
+    .filter((t) => t.tier);
+}
+
+function normalizeNextSteps(value) {
+  if (!Array.isArray(value) || value.length === 0) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return { step: item.trim(), detail: "", timing: "" };
+      return {
+        step: normalizeProposalText(item.step || item.title || item.name, "行動步驟"),
+        detail: normalizeProposalText(item.detail || item.description),
+        timing: normalizeProposalText(item.timing || item.duration || item.when),
+      };
+    })
+    .filter((s) => s.step);
+}
+
 function buildProposalSlides(proposalDraft, quoteItems = []) {
   const modules = proposalDraft.modules || [];
   const timeline = proposalDraft.timeline || [];
@@ -195,14 +293,49 @@ function buildProposalSlides(proposalDraft, quoteItems = []) {
         .slice(0, 8),
     },
     {
-      title: "專案報價與付款條件",
-      subtitle: proposalDraft.priceSummary,
-      bullets: [
-        ...normalizeProposalList(proposalDraft.pricingStrategy).slice(0, 4),
-        ...normalizeProposalList(proposalDraft.paymentMilestones).slice(0, 6),
-        ...normalizeProposalList(proposalDraft.ongoingFees).map((item) => `後續費用：${item}`),
-      ].slice(0, 10),
+      type: "payment-milestones",
+      title: "付款里程碑",
+      subtitle: "依階段付款，降低雙方風險，確保交付品質。",
+      data: proposalDraft.paymentMilestones,
+      bullets: proposalDraft.paymentMilestones
+        .map((m) => `${m.stage}${m.percentage ? `（${m.percentage}%）` : ""}${m.trigger ? `：${m.trigger}` : ""}`)
+        .slice(0, 8),
     },
+    ...(proposalDraft.testingCategories?.length > 0 ? [{
+      type: "testing-overview",
+      title: "測試規範總覽",
+      subtitle: "完整覆蓋各功能面向，確保上線品質。",
+      data: proposalDraft.testingCategories,
+      bullets: proposalDraft.testingCategories.map((t) => `${t.name}${t.description ? `：${t.description}` : ""}`).slice(0, 12),
+    }] : []),
+    {
+      type: "uat-flow",
+      title: "UAT 與驗收流程",
+      subtitle: "清楚的驗收階段與各方責任，避免爭議。",
+      data: proposalDraft.uatSteps,
+      bullets: proposalDraft.uatSteps.map((s) => `${s.title}${s.duration ? `｜${s.duration}` : ""}${s.responsible ? `（${s.responsible}）` : ""}`).slice(0, 10),
+    },
+    {
+      type: "maintenance-plans",
+      title: "後續維護方案",
+      subtitle: "上線後 6 個月免費保固，之後三方案擇一。",
+      data: proposalDraft.maintenanceTiers,
+      bullets: proposalDraft.maintenanceTiers.map((t) => `${t.tier}${t.monthlyFee ? `：${t.monthlyFee} / 月` : ""}${t.hoursPool ? `，工時池 ${t.hoursPool}` : ""}`),
+    },
+    ...(proposalDraft.contractProtection?.length > 0 ? [{
+      type: "contract-protection",
+      title: "合約保護重點",
+      subtitle: "明確範圍認定與驗收機制，保障雙方權益。",
+      data: proposalDraft.contractProtection,
+      bullets: proposalDraft.contractProtection.slice(0, 12),
+    }] : []),
+    ...(proposalDraft.nextSteps?.length > 0 ? [{
+      type: "next-steps",
+      title: "下一步",
+      subtitle: "選定方案後的進行流程。",
+      data: proposalDraft.nextSteps,
+      bullets: proposalDraft.nextSteps.map((s) => `${s.step}${s.timing ? `（${s.timing}）` : ""}${s.detail ? `：${s.detail}` : ""}`).slice(0, 8),
+    }] : []),
     {
       title: "提案結論",
       subtitle: proposalDraft.conclusion,
@@ -279,8 +412,13 @@ function normalizeProposalDraft(parsedResult, normalizedRequirements, items) {
     technicalStrategy: normalizeProposalList(source.technicalStrategy),
     timeline,
     pricingStrategy: normalizeProposalList(source.pricingStrategy),
-    paymentMilestones: normalizeProposalList(source.paymentMilestones),
+    paymentMilestones: normalizePaymentMilestones(source.paymentMilestones),
     ongoingFees: normalizeProposalList(source.ongoingFees),
+    testingCategories: normalizeTestingCategories(source.testingCategories),
+    uatSteps: normalizeUatSteps(source.uatSteps),
+    maintenanceTiers: normalizeMaintenanceTiers(source.maintenanceTiers),
+    contractProtection: normalizeProposalList(source.contractProtection),
+    nextSteps: normalizeNextSteps(source.nextSteps),
     conclusion: normalizeProposalText(
       source.conclusion,
       "建議先以第一階段完成可商用核心版本，保留後續擴充空間並降低初期開發風險。",
@@ -304,7 +442,9 @@ function normalizeProposalDraft(parsedResult, normalizedRequirements, items) {
       )
       .join("\n"),
     paymentTerms: [
-      ...proposalDraft.paymentMilestones,
+      ...proposalDraft.paymentMilestones.map((m) =>
+        `${m.stage}${m.percentage != null ? `（${m.percentage}%）` : ""}${m.trigger ? `：${m.trigger}` : ""}`
+      ),
       ...proposalDraft.ongoingFees.map((item) => `後續費用：${item}`),
       proposalDraft.feeBoundary,
     ].filter(Boolean).join("\n"),
@@ -2203,8 +2343,23 @@ JSON Structure:
       { "title": "string", "duration": "string", "detail": "string" }
     ],
     "pricingStrategy": ["string"],
-    "paymentMilestones": ["string"],
+    "paymentMilestones": [
+      { "stage": "string", "percentage": 30, "trigger": "string" }
+    ],
     "ongoingFees": ["string"],
+    "testingCategories": [
+      { "name": "string", "description": "string" }
+    ],
+    "uatSteps": [
+      { "title": "string", "duration": "string", "responsible": "我方 | 業主 | 雙方" }
+    ],
+    "maintenanceTiers": [
+      { "tier": "Basic | Standard | Premium", "monthlyFee": "string", "hoursPool": "string", "regularSla": "string", "criticalSla": "string" }
+    ],
+    "contractProtection": ["string"],
+    "nextSteps": [
+      { "step": "string", "detail": "string", "timing": "string" }
+    ],
     "conclusion": "string",
     "keyTakeaways": ["string"]
   }
@@ -2219,6 +2374,12 @@ Proposal Draft Rules:
 - Include enough sections to form 10-13 slides when the input contains enough information.
 - If describing 6-8 months in the proposal, set expectedDays to a practical number such as 180-240.
 - Keep proposalDraft in Traditional Chinese (Taiwan), concise but complete enough to generate slides.
+- paymentMilestones: generate 4-6 structured stages with realistic percentages summing to 100 (e.g. 30% sign, 20% design, 20% mid-dev, 15% UAT, 10% acceptance, 5% mid-warranty).
+- testingCategories: list 6-10 major testing areas relevant to the project (e.g. 功能測試, 權限/多租戶, AI生成測試, 效能測試, 安全性測試, 瀏覽器裝置).
+- uatSteps: describe 5-8 concrete UAT stages with durations and responsible party (我方/業主/雙方).
+- maintenanceTiers: always provide 3 tiers (Basic, Standard, Premium) with realistic monthly fees and SLA.
+- contractProtection: 6-10 clear contract protection clauses relevant to this type of project.
+- nextSteps: 4-6 clear action steps after proposal acceptance, each with a short detail and rough timing.
 
 Project Type Hint:
 ${normalizedProjectType || "Not specified"}
