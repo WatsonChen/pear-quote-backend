@@ -1316,6 +1316,8 @@ async function createQuoteDraftCopy(tx, sourceQuote, workspaceId, overrides = {}
           : sourceQuote.validityDays,
       wonAmount: null,
       workspaceId,
+      generationType: overrides.generationType ?? sourceQuote.generationType ?? "quote",
+      proposalTheme: overrides.proposalTheme !== undefined ? overrides.proposalTheme : (sourceQuote.proposalTheme ?? null),
       materials: sourceQuote.materials ?? null,
       roleRates: sourceQuote.roleRates ?? null,
       items: {
