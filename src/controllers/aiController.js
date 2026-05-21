@@ -37,9 +37,6 @@ const REFINE_QUEUE_WAIT_MS = readPositiveIntEnv(
   "REFINE_QUEUE_WAIT_MS",
   12_000,
 );
-const COMPLEX_AI_PLATFORM_MIN_HOURS = 2_800;
-const COMPLEX_AI_PLATFORM_MIN_AMOUNT = 4_500_000;
-const COMPLEX_AI_PLATFORM_CONSENSUS_RANGE = "NT$5,300,000-5,800,000";
 const roughEstimateUsageByWindow = new Map();
 
 function normalizeProposalText(value, fallback = "") {
@@ -451,236 +448,6 @@ function normalizeProposalDraft(parsedResult, normalizedRequirements, items) {
     nextSteps: proposalDraft.conclusion,
     ctaText: "接受此提案",
     slides: buildProposalSlides(proposalDraft, items),
-  };
-}
-
-function countScopeModules(parsedResult, text) {
-  const proposalModules = Array.isArray(parsedResult?.proposalDraft?.modules)
-    ? parsedResult.proposalDraft.modules.length
-    : 0;
-  const explicitModuleMatches = String(text || "").match(
-    /\bM\d+\b|核心功能模組|功能模組|module/i,
-  );
-  const numberedModuleMatches = String(text || "").match(
-    /M\d+[.．、:]|模組[（(][一二三四五六七八九十\d]+[）)]/g,
-  );
-
-  return Math.max(
-    proposalModules,
-    explicitModuleMatches ? 1 : 0,
-    numberedModuleMatches?.length || 0,
-  );
-}
-
-function detectComplexAiPlatformScope({
-  parsedResult,
-  items,
-  requirements,
-  projectType,
-  templateContext,
-  imagesCount,
-}) {
-  const moduleText = Array.isArray(parsedResult?.proposalDraft?.modules)
-    ? parsedResult.proposalDraft.modules
-        .map((module) =>
-          [
-            module?.id,
-            module?.title,
-            ...(Array.isArray(module?.bullets) ? module.bullets : []),
-          ]
-            .filter(Boolean)
-            .join(" "),
-        )
-        .join(" ")
-    : "";
-  const itemText = Array.isArray(items)
-    ? items
-        .map((item) =>
-          [
-            item?.description,
-            item?.suggestedRole,
-          ]
-            .filter(Boolean)
-            .join(" "),
-        )
-        .join(" ")
-    : "";
-  const combinedText = [
-    requirements,
-    projectType,
-    templateContext,
-    parsedResult?.summary,
-    moduleText,
-    itemText,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  const keywordGroups = [
-    ["ai", "rag", "gpt", "claude", "文案", "腳本", "客服", "自動導流"],
-    ["影片", "短影音", "heygen", "d-id", "剪輯", "字幕", "視覺"],
-    ["多平台", "facebook", "fb", "instagram", "ig", "tiktok", "threads", "line", "youtube"],
-    ["數據", "競品", "監控", "分析", "dashboard", "報表"],
-    ["發布", "排程", "內容日曆", "api", "串接", "integration"],
-    ["後台", "saas", "crm", "管理", "權限", "帳號"],
-  ];
-  const keywordHits = keywordGroups.filter((group) =>
-    group.some((keyword) => combinedText.includes(keyword)),
-  ).length;
-  const moduleCount = countScopeModules(parsedResult, combinedText);
-
-  return (
-    (moduleCount >= 6 && keywordHits >= 3) ||
-    (imagesCount >= 3 && keywordHits >= 4) ||
-    (keywordHits >= 5 && /平台|系統|產品|saas|後台/.test(combinedText))
-  );
-}
-
-function buildComplexAiPlatformCalibrationItems() {
-  return [
-    {
-      id: "ai_scope_pm",
-      type: "service",
-      description: "需求盤點、產品架構、一期範圍控管與專案管理",
-      estimatedHours: 320,
-      suggestedRole: "pm",
-      unit: null,
-      hourlyRate: 1200,
-    },
-    {
-      id: "ai_scope_uxui",
-      type: "service",
-      description: "後台資訊架構、核心操作流程、Dashboard 與多角色介面設計",
-      estimatedHours: 360,
-      suggestedRole: "design",
-      unit: null,
-      hourlyRate: 1200,
-    },
-    {
-      id: "ai_scope_frontend",
-      type: "service",
-      description: "管理後台、內容工作台、報表視覺化與多平台發布操作介面",
-      estimatedHours: 620,
-      suggestedRole: "frontend",
-      unit: null,
-      hourlyRate: 1500,
-    },
-    {
-      id: "ai_scope_backend",
-      type: "service",
-      description: "帳號權限、資料模型、排程任務、內容流程與核心 API 後端建置",
-      estimatedHours: 740,
-      suggestedRole: "backend",
-      unit: null,
-      hourlyRate: 1500,
-    },
-    {
-      id: "ai_scope_ai_workflow",
-      type: "service",
-      description: "AI 文案腳本、RAG 知識庫、客服回覆建議與自動化工作流設計實作",
-      estimatedHours: 650,
-      suggestedRole: "ai",
-      unit: null,
-      hourlyRate: 1600,
-    },
-    {
-      id: "ai_scope_integration",
-      type: "service",
-      description: "社群平台、Google Maps、影片工具與第三方服務串接架構",
-      estimatedHours: 330,
-      suggestedRole: "integration",
-      unit: null,
-      hourlyRate: 1500,
-    },
-    {
-      id: "ai_scope_analytics",
-      type: "service",
-      description: "數據採集、競品監控、成效分析、週期報告與決策中心",
-      estimatedHours: 250,
-      suggestedRole: "backend",
-      unit: null,
-      hourlyRate: 1500,
-    },
-    {
-      id: "ai_scope_devops",
-      type: "service",
-      description: "雲端部署、佇列排程、監控告警、環境設定與上線準備",
-      estimatedHours: 170,
-      suggestedRole: "devops",
-      unit: null,
-      hourlyRate: 1500,
-    },
-    {
-      id: "ai_scope_qa",
-      type: "service",
-      description: "整合測試、跨平台流程驗證、驗收修正與交付文件",
-      estimatedHours: 290,
-      suggestedRole: "qa",
-      unit: null,
-      hourlyRate: 1200,
-    },
-  ].map((item) => ({
-    ...item,
-    amount: Math.round(item.estimatedHours * item.hourlyRate),
-  }));
-}
-
-function calibrateComplexAiPlatformQuote({
-  parsedResult,
-  normalizedItems,
-  requirements,
-  projectType,
-  templateContext,
-  imagesCount,
-}) {
-  const isComplexAiPlatform = detectComplexAiPlatformScope({
-    parsedResult,
-    items: normalizedItems,
-    requirements,
-    projectType,
-    templateContext,
-    imagesCount,
-  });
-
-  if (!isComplexAiPlatform) {
-    return {
-      items: normalizedItems,
-      expectedDays: parsedResult?.expectedDays,
-      wasCalibrated: false,
-    };
-  }
-
-  const serviceItems = normalizedItems.filter((item) => item.type === "service");
-  const serviceHours = serviceItems.reduce(
-    (sum, item) => sum + Number(item.estimatedHours || 0),
-    0,
-  );
-  const totalAmount = normalizedItems.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
-    0,
-  );
-  const needsCalibration =
-    normalizedItems.length < 7 ||
-    serviceHours < COMPLEX_AI_PLATFORM_MIN_HOURS ||
-    totalAmount < COMPLEX_AI_PLATFORM_MIN_AMOUNT;
-
-  if (!needsCalibration) {
-    return {
-      items: normalizedItems,
-      expectedDays: parsedResult?.expectedDays,
-      wasCalibrated: false,
-    };
-  }
-
-  return {
-    items: buildComplexAiPlatformCalibrationItems(),
-    expectedDays:
-      Number.isFinite(Number(parsedResult?.expectedDays)) &&
-      Number(parsedResult.expectedDays) >= 180
-        ? parsedResult.expectedDays
-        : 210,
-    wasCalibrated: true,
   };
 }
 
@@ -2267,39 +2034,51 @@ Important Instructions:
    - Do NOT compress the screenshot content into 3-4 generic engineering tasks.
    - Extract the actual product logic, module names, stage boundaries, exclusions, timeline, payment logic, and operating cost assumptions from the screenshots.
    - The proposalDraft must be the most detailed part of the response.
-3. **Financials**:
-   - You MUST estimate a reasonable "hourlyRate" in TWD.
-   - For service items, "hourlyRate" means labor/unit hourly rate.
+3. **Financials — assess the scope tier FIRST, then assign hours and rates**:
+   - Read the full requirements, count the distinct modules, identify integrations, and determine the project tier before writing a single number.
+   - PRICING TIERS (use these as firm anchors; do not skip tiers without clear scope justification):
+     * Tier 1 · Simple (brochure / landing page, 1–4 pages, no custom backend):
+         Items: 3–4 | Total: NT$50,000–130,000 | Total service hours: ≤ 80hr | Timeline: 2–4 weeks
+     * Tier 2 · Basic web app (CMS, blog, simple CRUD, standard auth, < 5 features):
+         Items: 4–7 | Total: NT$150,000–400,000 | Timeline: 4–10 weeks
+     * Tier 3 · Standard platform (e-commerce, booking system, multi-role app, payments, 5–8 modules):
+         Items: 6–9 | Total: NT$400,000–1,200,000 | Timeline: 2–4 months
+     * Tier 4 · Complex platform (SaaS, CRM, multi-tenant, AI workflow, internal tool, 8–12 modules):
+         Items: 8–12 | Total: NT$1,200,000–3,500,000 | Timeline: 4–8 months
+     * Tier 5 · Enterprise AI platform (multi-platform AI content, RAG, multi-social API integration, full DevOps, 12+ modules):
+         Items: 10–14 | Total: NT$3,500,000–7,000,000 | Timeline: 6–12 months
+   - A simple landing page with a contact form is Tier 1 even if it has animations. Do NOT inflate it to Tier 2–3.
+   - A standard e-commerce site with auth, cart, and payments is Tier 3, not Tier 4.
+   - Only reach Tier 5 when the scope genuinely includes 12+ modules, AI workflow, multi-platform social API integration, and enterprise DevOps together.
+   - Hourly rate guidelines by role (apply lower end for Tier 1–2; upper end only for Tier 4–5):
+     * PM / QA: NT$1,000–1,400/hr
+     * Frontend / UX/UI: NT$1,200–1,600/hr
+     * Backend: NT$1,300–1,800/hr
+     * AI / DevOps / Integration: NT$1,400–2,000/hr
+   - "amount" MUST equal "estimatedHours" × "hourlyRate". Do NOT return 0 for rates or amounts.
    - For material items, "hourlyRate" means unit price.
-   - "amount" MUST be calculated as "estimatedHours" * "hourlyRate".
-   - Do NOT return 0 for rates or amounts.
-   - For complex AI platform proposals involving AI content generation, video generation workflow, content calendar, multi-platform publishing, social API integration, analytics, CRM-like management, or multi-module SaaS back office:
-     * Estimate from scope first: identify the core modules, delivery phases, integration surfaces, automation complexity, testing needs, and launch readiness work before assigning hours or price.
-     * The first-stage build should usually be estimated as 6-8 months, not 60-90 days, unless the user explicitly asks for a smaller MVP.
-     * Total implementation effort should usually be 2,800-3,800 hours across PM, UX/UI, frontend, backend, AI workflow, integration, DevOps, and QA when the scope includes 7+ core modules.
-     * The total quote should usually land around NT$5,300,000-5,800,000 before tax for that level of scope, but do not force an exact target. If the derived total falls outside this range, the item breakdown must make the reason obvious from the scope.
-     * A scope resembling an AI short-video generation and multi-platform publishing platform should be comparable to a direct GPT consulting estimate for the same requirements: price, total effort, and item breakdown may vary, but they should not diverge materially without a clear scope reason.
-   - For this kind of complex platform, do not return only 3-4 broad items totaling around NT$2,000,000; that underprices the scope and loses the module-level work logic.
+   - **Tier 1 overhead rule**: For Tier 1 projects, do NOT create separate PM, QA, or DevOps line items. Fold any minor testing and deployment effort into the existing frontend/design items. A static site must not have more than 4 items, and total hours must stay within the 80hr cap.
+   - **No invented scope**: Only include items that the requirements explicitly state or clearly imply. If the requirements say "no backend", "static only", or "no custom DB", do NOT add backend or server items.
+   - **No operational costs in quote items**: Do NOT include hosting fees, server rental, domain costs, API usage fees, cloud credits, or any recurring operational expense as a development line item. If relevant, mention them in proposalDraft.ongoingFees only.
 4. **Quote Item Classification**:
-   - Each item MUST include "type" and it must be either "service" or "material".
-   - "service" = labor, design, planning, project management, engineering execution, testing, installation, supervision, software licenses, cloud/API setup allowances, third-party service setup, or any work/fee billed by effort or project allowance.
-   - "material" = ONLY physical products, fixtures, hardware, building materials, wiring, pipes, boards, paint, tiles, lighting, sanitaryware, appliances, furniture, or consumables.
-   - Do NOT classify cloud hosting, API usage, SaaS subscriptions, AI credits, social publishing API fees, or third-party platform fees as "material"; use "service" and clearly name them as third-party/usage allowances.
-   - Quote items should be high-level deliverable packages that map to the proposal modules, not tiny developer tasks.
-   - Prefer 7-12 quote items for platform/product proposals when the screenshots contain multiple modules.
-   - Quote item descriptions must be complete and readable as line items; do not let them become long comma-separated feature dumps.
-   - Use practical role categories like "PM", "UX/UI", "Frontend", "Backend", "AI / Automation", "API Integration", "DevOps", "QA".
+   - Each item MUST include "type": "service" or "material".
+   - "service" = labor, design, planning, project management, engineering, testing, installation, software licenses, cloud/API setup allowances, third-party service setup, or any work billed by effort.
+   - "material" = ONLY physical products, hardware, building materials, wiring, tiles, lighting, fixtures, appliances, furniture, or consumables.
+   - Do NOT classify cloud hosting, API usage, SaaS subscriptions, AI credits, or platform fees as "material" — use "service" and name them as third-party/usage allowances.
+   - Item count must match the tier range above. Do NOT pad simple projects with extra items to make the quote look bigger.
+   - Only include items that the requirements explicitly state or clearly imply. Do NOT invent scope to reach the tier's maximum item count.
+   - Quote item descriptions must be complete readable line items, not comma-separated feature dumps.
+   - Use practical role categories: "PM", "UX/UI", "Frontend", "Backend", "AI / Automation", "API Integration", "DevOps", "QA".
 5. **Service Item Rules**:
-   - "suggestedRole" may be a practical delivery category such as "pm", "design", "frontend", "backend", "qa", "ai", "integration", "devops", "content", or "other".
-   - "unit" should be null or an empty string.
+   - "suggestedRole": "pm", "design", "frontend", "backend", "qa", "ai", "integration", "devops", "content", or "other".
+   - "unit" should be null or empty string.
 6. **Material Item Rules**:
-   - "suggestedRole" should be the material name or material category in Traditional Chinese, not a staff role.
-   - "estimatedHours" represents quantity for materials.
-   - "unit" MUST be a practical quantity unit such as "式", "組", "件", "支", "才", "片", "箱", "桶", "公尺", "平方公尺", "盞", "座".
+   - "suggestedRole" should be the material name or category in Traditional Chinese, not a staff role.
+   - "estimatedHours" represents quantity.
+   - "unit" MUST be a practical quantity unit: "式", "組", "件", "支", "才", "片", "箱", "桶", "公尺", "平方公尺", "盞", "座".
 7. **Interior / Construction Projects**:
-   - If the requirement is related to interior design, renovation, construction, fit-out, engineering, or any physical build project, you MUST separate labor/service items and material items.
-   - When physical materials are reasonably implied, you MUST include material items and not hide them inside service items.
-   - For these projects, return at least 2 material items unless the user explicitly says labor only / materials excluded.
+   - Separate labor/service items and material items.
+   - Return at least 2 material items when physical materials are implied, unless the user says labor only.
 
 JSON Structure:
 {
@@ -2367,12 +2146,11 @@ JSON Structure:
 
 Proposal Draft Rules:
 - Treat screenshots as source material, not decoration. Infer the project/product logic from them.
-- The proposalDraft should resemble a polished first-stage build proposal like a consulting deck, with clear scope, boundaries, timeline, pricing logic, payment milestones, and next-stage expansion.
+- The proposalDraft should resemble a polished first-stage build proposal, with clear scope, boundaries, timeline, pricing logic, payment milestones, and next-stage expansion.
 - If screenshots show module names/features, preserve their module structure and rewrite it into implementation-oriented proposal language.
 - Avoid generic headings such as "我們深入理解了您的需求" as actual content. Use project-specific titles and bullets.
 - Be explicit about third-party API / AI / cloud / usage fees when relevant.
 - Include enough sections to form 10-13 slides when the input contains enough information.
-- If describing 6-8 months in the proposal, set expectedDays to a practical number such as 180-240.
 - Keep proposalDraft in Traditional Chinese (Taiwan), concise but complete enough to generate slides.
 - paymentMilestones: generate 4-6 structured stages with realistic percentages summing to 100 (e.g. 30% sign, 20% design, 20% mid-dev, 15% UAT, 10% acceptance, 5% mid-warranty).
 - testingCategories: list 6-10 major testing areas relevant to the project (e.g. 功能測試, 權限/多租戶, AI生成測試, 效能測試, 安全性測試, 瀏覽器裝置).
@@ -2380,6 +2158,7 @@ Proposal Draft Rules:
 - maintenanceTiers: always provide 3 tiers (Basic, Standard, Premium) with realistic monthly fees and SLA.
 - contractProtection: 6-10 clear contract protection clauses relevant to this type of project.
 - nextSteps: 4-6 clear action steps after proposal acceptance, each with a short detail and rough timing.
+- **Consistency rule**: The priceSummary must reflect the actual total of the items array. Do not claim a price in the proposal that does not match the quoted items. The scope described in the proposal must not include features that have no corresponding quote item.
 
 Project Type Hint:
 ${normalizedProjectType || "Not specified"}
@@ -2422,6 +2201,7 @@ ${normalizedRequirements || "No additional user-entered requirements."}
         modelName,
         fallbackModelNames,
         maxQueueWaitMs: ANALYZE_QUEUE_WAIT_MS,
+        temperature: 0.1,
       });
     } catch (error) {
       const statusCode = extractGeminiStatusCode(error);
@@ -2533,42 +2313,12 @@ ${normalizedRequirements || "No additional user-entered requirements."}
       : [];
     const normalizedSummary =
       normalizeTextField(parsedResult?.summary) || "AI 需求分析結果";
-    const calibratedQuote = calibrateComplexAiPlatformQuote({
-      parsedResult,
-      normalizedItems,
-      requirements: normalizedRequirements,
-      projectType: normalizedProjectType,
-      templateContext: normalizedTemplateContext,
-      imagesCount: safeImages.length,
-    });
-    const responseItems = calibratedQuote.items;
-    if (calibratedQuote.wasCalibrated) {
-      const calibratedTotal = responseItems.reduce(
-        (sum, item) => sum + Number(item.amount || 0),
-        0,
-      );
-      parsedResult.expectedDays = calibratedQuote.expectedDays;
-      parsedResult.proposalDraft = {
-        ...(parsedResult.proposalDraft || {}),
-        priceSummary: `建議一期報價：NT$ ${Math.round(calibratedTotal).toLocaleString("en-US")} 未稅`,
-        timelineSummary: "預估一期建置期程：約 6-8 個月",
-        pricingStrategy: [
-          `本次報價已依多模組 AI 平台校正，目標與 GPT / Claude / Gemini 對同一需求的合理區間收斂至 ${COMPLEX_AI_PLATFORM_CONSENSUS_RANGE}。`,
-          "避免將 7 個以上核心模組壓縮成少數粗項，導致工時與總價明顯低估。",
-          "估算包含 PM、UX/UI、前端、後端、AI 工作流、第三方串接、DevOps 與 QA。",
-          "第三方 AI 用量、社群平台 API、雲端主機與正式營運費用另計。",
-        ],
-        feeBoundary:
-          "本報價為第一階段商用版本建置費；第三方 AI、社群 API、雲端、代理服務與平台用量費另計，且不包含違反平台規範的自動化操作。",
-      };
-    }
     const proposalDraft = normalizeProposalDraft(
       parsedResult,
       normalizedRequirements,
-      responseItems,
+      normalizedItems,
     );
 
-    // Deduct credits after a successful parse
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
@@ -2580,21 +2330,13 @@ ${normalizedRequirements || "No additional user-entered requirements."}
 
     return res.json({
       summary: normalizedSummary,
-      items: responseItems,
+      items: normalizedItems,
       expectedDays:
-        Number.isFinite(Number(calibratedQuote.expectedDays)) &&
-        Number(calibratedQuote.expectedDays) > 0
-          ? Math.round(Number(calibratedQuote.expectedDays))
+        Number.isFinite(Number(parsedResult?.expectedDays)) &&
+        Number(parsedResult.expectedDays) > 0
+          ? Math.round(Number(parsedResult.expectedDays))
           : null,
       proposalDraft,
-      pricingCalibration: calibratedQuote.wasCalibrated
-        ? {
-            applied: true,
-            benchmarkRange: COMPLEX_AI_PLATFORM_CONSENSUS_RANGE,
-            reason:
-              "Detected complex multi-module AI platform scope; raised underpriced AI output to first-stage delivery baseline.",
-          }
-        : undefined,
     });
   } catch (error) {
     console.error("CRITICAL AI Analysis error:", error);
