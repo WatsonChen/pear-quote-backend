@@ -1,12 +1,11 @@
 import prisma from "../lib/prisma.js";
 import crypto from "crypto";
 
-const NEWEBPAY_HASH_KEY = process.env.NEWEBPAY_HASH_KEY || "fIhp8AUb0OwHg3Q7uhKd4CX2rUa5MHB2";
-const NEWEBPAY_HASH_IV = process.env.NEWEBPAY_HASH_IV || "PyY9AgEt38LUf5JC";
-const NEWEBPAY_MERCHANT_ID = process.env.NEWEBPAY_MERCHANT_ID || "MS3824337262";
+const NEWEBPAY_HASH_KEY = process.env.NEWEBPAY_HASH_KEY;
+const NEWEBPAY_HASH_IV = process.env.NEWEBPAY_HASH_IV;
+const NEWEBPAY_MERCHANT_ID = process.env.NEWEBPAY_MERCHANT_ID;
 const NEWEBPAY_URL =
-  process.env.NEWEBPAY_URL ||
-  "https://ccore.newebpay.com/MPG/mpg_gateway"; // Use test environment by default
+  process.env.NEWEBPAY_URL || "https://core.newebpay.com/MPG/mpg_gateway";
 
 const DEFAULT_RETURN_PATH = "/admin/settings?tab=billing";
 const TOP_UP_PLANS = {
