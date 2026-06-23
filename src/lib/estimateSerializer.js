@@ -34,6 +34,8 @@ const INTERNAL_TOP_LEVEL = new Set([
   "estimateCalibrationFactors",
   "pricingCalibrationFactors",
   "calibrationFactorsApplied",
+  // _fieldVisibility is an admin developer guide — clients don't need to know which fields are internal
+  "_fieldVisibility",
 ]);
 const INTERNAL_MODULE = new Set(["internalRange"]);
 
@@ -124,6 +126,10 @@ export function buildPublicEstimateResponse(data) {
 /**
  * Share / proposal / PDF response — public access via share token or proposal page.
  * Returns summary-level only: no module-level breakdown, no internal data.
+ *
+ * Note: requirementQuestions is intentionally excluded here.
+ * The share page is shown to clients as a polished proposal — surfacing "still figuring this out"
+ * questions lowers professional impression. Owner/admin preview should use buildPublicEstimateResponse.
  */
 export function buildShareProposalResponse(data) {
   return {
@@ -134,7 +140,6 @@ export function buildShareProposalResponse(data) {
     estimationNotes: data.estimationNotes ?? "",
     projectRiskSummary: data.projectRiskSummary ?? "",
     missingInfo: data.missingInfo ?? [],
-    requirementQuestions: data.requirementQuestions ?? [],
   };
 }
 

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   analyzeRequirements,
+  getBaselineDisplayNames,
   refineProposalSection,
   refineQuote,
   refineRoughEstimate,
@@ -19,6 +20,7 @@ router.post("/rough-estimate", roughEstimate);
 // Protect all other AI routes
 router.use(authMiddleware);
 
+router.get("/baseline-display-names", getBaselineDisplayNames);
 router.post("/analyze", analyzeRequirements);
 router.post("/parse-conversation", parseConversation);
 router.post("/estimate-modules", estimateModules);

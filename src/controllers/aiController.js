@@ -10,6 +10,7 @@ import {
   normalizeJsonResponse,
 } from "../lib/gemini.js";
 import { buildAnalyzePrompt } from "../prompts/analyzePrompt.js";
+import { BASELINE_DISPLAY_NAMES } from "../lib/estimationBaselines.js";
 
 const DEFAULT_AI_RETRY_AFTER_SECONDS = 20;
 const CONFIDENCE_SCORE_MIN = 62;
@@ -2604,4 +2605,13 @@ Rules:
       apiKeyPresent: hasGeminiApiKey(),
     });
   }
+}
+
+/**
+ * GET /api/ai/baseline-display-names
+ * Returns the human-readable display names for all baseline keys.
+ * Auth required — keeps the mapping server-authoritative and avoids frontend duplication.
+ */
+export function getBaselineDisplayNames(req, res) {
+  return res.json({ success: true, displayNames: BASELINE_DISPLAY_NAMES });
 }
