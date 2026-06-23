@@ -33,6 +33,12 @@ function buildCompanyInfo(settings, ownerUser) {
   };
 }
 
+/**
+ * Serializes a quote into a client-safe proposal response.
+ * WHITELIST APPROACH: only explicitly listed fields are returned.
+ * Internal estimate fields (internalRange, calibration, _fieldVisibility, etc.)
+ * are never included — they exist only in /api/ai/estimate-modules admin responses.
+ */
 function serializePublicProposal(quote) {
   const ownerUser = resolveOwnerUser(quote.workspace);
   const settings = quote.workspace?.settings || {};
