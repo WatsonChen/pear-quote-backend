@@ -12,6 +12,7 @@ import baseRoutes from "./routes/baseRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import proposalRoutes from "./routes/proposalRoutes.js";
+import calibrationRoutes from "./routes/calibrationRoutes.js";
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/calibration", calibrationRoutes);
 
 // Swagger Documentation
 import swaggerUi from "swagger-ui-express";
