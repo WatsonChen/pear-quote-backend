@@ -55,6 +55,7 @@ DATABASE_URL="..." npx prisma migrate resolve --applied 20260616000000_add_estim
 DATABASE_URL="..." npx prisma migrate resolve --applied 20260623000000_add_calibration_tables
 DATABASE_URL="..." npx prisma migrate resolve --applied 20260623001000_calibration_v2
 DATABASE_URL="..." npx prisma migrate resolve --applied 20260625000000_add_snapshot_revision_lineage
+DATABASE_URL="..." npx prisma migrate resolve --applied 20260625010000_add_credit_compensation
 
 # 4. 驗證狀態
 DATABASE_URL="..." npx prisma migrate status
@@ -64,7 +65,7 @@ DATABASE_URL="..." npx prisma migrate status
 DATABASE_URL="..." npx prisma generate
 ```
 
-### 快速驗證（確認 12 張表都存在）
+### 快速驗證（確認 13 張表都存在）
 
 ```sql
 SELECT table_name
@@ -77,6 +78,7 @@ ORDER BY table_name;
 預期看到：
 ```
 CalibrationAuditLog
+CreditCompensation
 Customer
 EstimateAdjustment
 EstimateSnapshot
@@ -117,12 +119,13 @@ WHERE table_schema = 'public'
     'User','Workspace','WorkspaceUser','Order','Customer',
     'SystemSettings','Quote','QuoteItem',
     'EstimateSnapshot','EstimateAdjustment',
-    'TeamCalibrationProfile','CalibrationAuditLog'
+    'TeamCalibrationProfile','CalibrationAuditLog',
+    'CreditCompensation'
   )
 ORDER BY table_name;
 ```
 
-**通過條件：** 必須回傳 12 列。若有缺少，停止後續步驟。
+**通過條件：** 必須回傳 13 列。若有缺少，停止後續步驟。
 
 ### B-3：確認 EstimateSnapshot 新欄位已存在
 
@@ -172,7 +175,7 @@ ORDER BY migration_name;
 ```
 
 **通過條件：**  
-- 12 筆 migration 都出現（名稱前綴 20251216 ~ 20260625）  
+- 13 筆 migration 都出現（名稱前綴 20251216 ~ 20260625）  
 - 全部 `finished_at` 非 NULL  
 - 全部 `applied_steps_count` ≥ 1
 
@@ -193,6 +196,18 @@ ORDER BY column_name;
 ```
 
 **通過條件：** 必須包含 `creditBalance` (integer, NOT NULL, default 20)。
+
+### B-8：確認 CreditCompensation 表格存在
+
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'CreditCompensation'
+ORDER BY column_name;
+```
+
+**通過條件：** 必須回傳 8 列（id, workspaceId, amount, operation, status, error, createdAt, resolvedAt）。  
+若回傳 0 列，表示 `20260625010000_add_credit_compensation` 尚未套用，須在 Runbook C 後執行該 migration SQL。
 
 ---
 
@@ -218,6 +233,7 @@ npx prisma migrate resolve --applied 20260616000000_add_estimation_baselines
 npx prisma migrate resolve --applied 20260623000000_add_calibration_tables
 npx prisma migrate resolve --applied 20260623001000_calibration_v2
 npx prisma migrate resolve --applied 20260625000000_add_snapshot_revision_lineage
+npx prisma migrate resolve --applied 20260625010000_add_credit_compensation
 
 # 3. 驗證
 npx prisma migrate status
