@@ -15,11 +15,15 @@ model Workspace {
   nextBillingDate  DateTime?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
-  customers        Customer[]
-  orders           Order[]
-  quotes           Quote[]
-  settings         SystemSettings?
-  users            WorkspaceUser[]
+  customers              Customer[]
+  orders                 Order[]
+  quotes                 Quote[]
+  settings               SystemSettings?
+  users                  WorkspaceUser[]
+  estimateSnapshots      EstimateSnapshot[]
+  estimateAdjustments    EstimateAdjustment[]
+  calibrationProfile     TeamCalibrationProfile?
+  calibrationAuditLogs   CalibrationAuditLog[]
 }
 
 model WorkspaceUser {
@@ -81,9 +85,10 @@ model Quote {
   clientResponseMessage String?
   proposalContent Json?
   proposalTheme Json?
-  customer     Customer?   @relation(fields: [customerId], references: [id])
-  workspace    Workspace   @relation(fields: [workspaceId], references: [id])
-  items        QuoteItem[]
+  customer          Customer?          @relation(fields: [customerId], references: [id])
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id])
+  items             QuoteItem[]
+  estimateSnapshots EstimateSnapshot[]
 }
 
 model Customer {
@@ -121,6 +126,79 @@ model QuoteItem {
   quote          Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 }
 
+model EstimateSnapshot {
+  id                        String              @id @default(uuid())
+  workspaceId               String
+  quoteId                   String?
+  baselineVersion           String              @default("1")
+  detectedModules           Json
+  baselineHours             Json
+  complexityMultiplier      Float               @default(1.0)
+  riskBuffer                Float               @default(0)
+  rawGlobalEstimate         Json                // Before team calibration — immutable record
+  calibratedEstimate        Json?               // After team calibration applied at generation time
+  calibrationFactorsApplied Json?               // Snapshot of profile factors used at generation time
+  originalHoursRange        Json
+  confidenceScore           Float?
+  missingInfo               Json?
+  projectRiskFlags          Json?
+  requirementSpec           Json?
+  createdAt                 DateTime            @default(now())
+  workspace                 Workspace           @relation(fields: [workspaceId], references: [id])
+  quote                     Quote?              @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  adjustment                EstimateAdjustment?
+}
+
+model EstimateAdjustment {
+  id                    String           @id @default(uuid())
+  snapshotId            String           @unique
+  workspaceId           String
+  adjustedModules       Json?
+  adjustedHoursByRole   Json?            // User's manual hour adjustments (pricing strategy, not actual)
+  actualHoursByRole     Json?            // Actual tracked hours after project completion (estimateCalibration source)
+  adjustedEstimateRange Json?
+  adjustmentReason      String?
+  finalQuotedPrice      Float?
+  acceptedPrice         Float?
+  projectStatus         String           @default("draft")
+  scopeChanged          Boolean          @default(false)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  snapshot              EstimateSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  workspace             Workspace        @relation(fields: [workspaceId], references: [id])
+}
+
+model TeamCalibrationProfile {
+  id                             String    @id @default(uuid())
+  workspaceId                    String    @unique
+  estimateCalibrationFactors     Json?     // Based on actualHoursByRole (completed projects) — affects hours
+  pricingCalibrationFactors      Json?     // Based on adjustedEstimateRange/finalQuotedPrice — affects price only
+  projectTypeCalibrationFactors  Json?
+  estimateSampleSize             Int       @default(0)
+  pricingSampleSize              Int       @default(0)
+  estimateConfidenceLevel        String    @default("low")
+  pricingConfidenceLevel         String    @default("low")
+  createdAt                      DateTime  @default(now())
+  updatedAt                      DateTime  @updatedAt
+  workspace                      Workspace @relation(fields: [workspaceId], references: [id])
+  auditLogs                      CalibrationAuditLog[]
+}
+
+model CalibrationAuditLog {
+  id                      String                 @id @default(uuid())
+  workspaceId             String
+  profileId               String
+  appliedBy               String                 // userId
+  previousEstimateFactors Json?
+  newEstimateFactors      Json?
+  previousPricingFactors  Json?
+  newPricingFactors       Json?
+  reason                  String?
+  appliedAt               DateTime               @default(now())
+  workspace               Workspace              @relation(fields: [workspaceId], references: [id])
+  profile                 TeamCalibrationProfile @relation(fields: [profileId], references: [id])
+}
+
 model SystemSettings {
   id                           String    @id @default(uuid())
   companyName                  String?
@@ -139,6 +217,7 @@ model SystemSettings {
   projectTypes                 Json?
   materials                    Json?
   quoteValidityDays            Int?      @default(30)
+  estimationBaselines          Json?
   workspaceId                  String    @unique
   workspace                    Workspace @relation(fields: [workspaceId], references: [id])
 }

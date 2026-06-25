@@ -9,6 +9,8 @@ import {
   isGeminiTemporaryStatus as isGeminiRetryableStatus,
   normalizeJsonResponse,
 } from "../lib/gemini.js";
+import { buildAnalyzePrompt } from "../prompts/analyzePrompt.js";
+import { BASELINE_DISPLAY_NAMES } from "../lib/estimationBaselines.js";
 
 const DEFAULT_AI_RETRY_AFTER_SECONDS = 20;
 const CONFIDENCE_SCORE_MIN = 62;
@@ -233,6 +235,19 @@ function normalizeNextSteps(value) {
     .filter((s) => s.step);
 }
 
+function normalizeRisks(value) {
+  if (!Array.isArray(value) || value.length === 0) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return { risk: item.trim(), mitigation: "" };
+      return {
+        risk: normalizeProposalText(item.risk || item.title || item.name, ""),
+        mitigation: normalizeProposalText(item.mitigation || item.solution || item.detail || item.description),
+      };
+    })
+    .filter((r) => r.risk);
+}
+
 function buildProposalSlides(proposalDraft, quoteItems = []) {
   const modules = proposalDraft.modules || [];
   const timeline = proposalDraft.timeline || [];
@@ -319,6 +334,13 @@ function buildProposalSlides(proposalDraft, quoteItems = []) {
       data: proposalDraft.maintenanceTiers,
       bullets: proposalDraft.maintenanceTiers.map((t) => `${t.tier}${t.monthlyFee ? `：${t.monthlyFee} / 月` : ""}${t.hoursPool ? `，工時池 ${t.hoursPool}` : ""}`),
     },
+    ...(proposalDraft.risks?.length > 0 ? [{
+      type: "risk-overview",
+      title: "專案風險與應對措施",
+      subtitle: "提前辨識關鍵風險，降低專案執行中的不確定性。",
+      data: proposalDraft.risks,
+      bullets: proposalDraft.risks.map((r) => `${r.risk}${r.mitigation ? `→ ${r.mitigation}` : ""}`).slice(0, 8),
+    }] : []),
     ...(proposalDraft.contractProtection?.length > 0 ? [{
       type: "contract-protection",
       title: "合約保護重點",
@@ -373,10 +395,9 @@ function normalizeProposalDraft(parsedResult, normalizedRequirements, items) {
       source.positioning,
       "第一階段聚焦可商用的核心流程，進階自動化與高風險能力列入後續擴充。",
     ),
-    priceSummary: normalizeProposalText(
-      source.priceSummary,
-      totalAmount > 0 ? `建議報價：NT$ ${Math.round(totalAmount).toLocaleString("en-US")} 未稅` : "",
-    ),
+    priceSummary: totalAmount > 0
+      ? `建議報價：NT$ ${Math.round(totalAmount).toLocaleString("en-US")} 未稅`
+      : normalizeProposalText(source.priceSummary, ""),
     timelineSummary: normalizeProposalText(
       source.timelineSummary,
       expectedDays ? `預估開發期程：${expectedDays} 天` : "預估期程依最終範圍確認",
@@ -415,6 +436,7 @@ function normalizeProposalDraft(parsedResult, normalizedRequirements, items) {
     uatSteps: normalizeUatSteps(source.uatSteps),
     maintenanceTiers: normalizeMaintenanceTiers(source.maintenanceTiers),
     contractProtection: normalizeProposalList(source.contractProtection),
+    risks: normalizeRisks(source.risks),
     nextSteps: normalizeNextSteps(source.nextSteps),
     conclusion: normalizeProposalText(
       source.conclusion,
@@ -2026,152 +2048,12 @@ export async function analyzeRequirements(req, res) {
       /裝潢|装修|裝修|室內|室内|工程|施工|拆除|泥作|木作|水電|机电|機電|管線|管道|天花|地坪|油漆|建材|櫃體|系统柜|系統櫃|家具|傢俱|燈具|灯具|衛浴|卫浴|防水|renovation|interior|construction|fit[ -]?out/i.test(
         `${normalizedProjectType} ${normalizedRequirements} ${normalizedTemplateContext}`,
       );
-    const prompt = `
-Please analyze these project requirements and attached screenshots. Your primary output is a client-ready proposal draft comparable to a polished first-stage project proposal deck. Also include quote items as a pricing appendix.
-Return the result EXCLUSIVELY as a valid JSON object.
-
-Important Instructions:
-1. **Language**: All text content (summary, description, material names, units, etc.) MUST be in **Traditional Chinese (Taiwan)** (繁體中文).
-2. **Proposal-first output**:
-   - Do NOT compress the screenshot content into 3-4 generic engineering tasks.
-   - Extract the actual product logic, module names, stage boundaries, exclusions, timeline, payment logic, and operating cost assumptions from the screenshots.
-   - The proposalDraft must be the most detailed part of the response.
-3. **Financials — assess the scope tier FIRST, then assign hours and rates**:
-   - Read the full requirements, count the distinct modules, identify integrations, and determine the project tier before writing a single number.
-   - PRICING TIERS (use these as firm anchors; do not skip tiers without clear scope justification):
-     * Tier 1 · Simple (brochure / landing page, 1–4 pages, no custom backend):
-         Items: 3–4 | Total: NT$50,000–130,000 | Total service hours: ≤ 80hr | Timeline: 2–4 weeks
-     * Tier 2 · Basic web app (CMS, blog, simple CRUD, standard auth, < 5 features):
-         Items: 4–7 | Total: NT$150,000–400,000 | Timeline: 4–10 weeks
-     * Tier 3 · Standard platform (e-commerce, booking system, multi-role app, payments, 5–8 modules):
-         Items: 6–9 | Total: NT$400,000–1,200,000 | Timeline: 2–4 months
-     * Tier 4 · Complex platform (SaaS, CRM, multi-tenant, AI workflow, internal tool, 8–12 modules):
-         Items: 8–12 | Total: NT$1,200,000–3,500,000 | Timeline: 4–8 months
-     * Tier 5 · Enterprise AI platform (multi-platform AI content, RAG, multi-social API integration, full DevOps, 12+ modules):
-         Items: 10–14 | Total: NT$3,500,000–7,000,000 | Timeline: 6–12 months
-   - A simple landing page with a contact form is Tier 1 even if it has animations. Do NOT inflate it to Tier 2–3.
-   - A standard e-commerce site with auth, cart, and payments is Tier 3, not Tier 4.
-   - Only reach Tier 5 when the scope genuinely includes 12+ modules, AI workflow, multi-platform social API integration, and enterprise DevOps together.
-   - Hourly rate guidelines by role (apply lower end for Tier 1–2; upper end only for Tier 4–5):
-     * PM / QA: NT$1,000–1,400/hr
-     * Frontend / UX/UI: NT$1,200–1,600/hr
-     * Backend: NT$1,300–1,800/hr
-     * AI / DevOps / Integration: NT$1,400–2,000/hr
-   - "amount" MUST equal "estimatedHours" × "hourlyRate". Do NOT return 0 for rates or amounts.
-   - For material items, "hourlyRate" means unit price.
-   - **Tier 1 overhead rule**: For Tier 1 projects, do NOT create separate PM, QA, or DevOps line items. Fold any minor testing and deployment effort into the existing frontend/design items. A static site must not have more than 4 items, and total hours must stay within the 80hr cap.
-   - **No invented scope**: Only include items that the requirements explicitly state or clearly imply. If the requirements say "no backend", "static only", or "no custom DB", do NOT add backend or server items.
-   - **No operational costs in quote items**: Do NOT include hosting fees, server rental, domain costs, API usage fees, cloud credits, or any recurring operational expense as a development line item. If relevant, mention them in proposalDraft.ongoingFees only.
-4. **Quote Item Classification**:
-   - Each item MUST include "type": "service" or "material".
-   - "service" = labor, design, planning, project management, engineering, testing, installation, software licenses, cloud/API setup allowances, third-party service setup, or any work billed by effort.
-   - "material" = ONLY physical products, hardware, building materials, wiring, tiles, lighting, fixtures, appliances, furniture, or consumables.
-   - Do NOT classify cloud hosting, API usage, SaaS subscriptions, AI credits, or platform fees as "material" — use "service" and name them as third-party/usage allowances.
-   - Item count must match the tier range above. Do NOT pad simple projects with extra items to make the quote look bigger.
-   - Only include items that the requirements explicitly state or clearly imply. Do NOT invent scope to reach the tier's maximum item count.
-   - Quote item descriptions must be complete readable line items, not comma-separated feature dumps.
-   - Use practical role categories: "PM", "UX/UI", "Frontend", "Backend", "AI / Automation", "API Integration", "DevOps", "QA".
-5. **Service Item Rules**:
-   - "suggestedRole": "pm", "design", "frontend", "backend", "qa", "ai", "integration", "devops", "content", or "other".
-   - "unit" should be null or empty string.
-6. **Material Item Rules**:
-   - "suggestedRole" should be the material name or category in Traditional Chinese, not a staff role.
-   - "estimatedHours" represents quantity.
-   - "unit" MUST be a practical quantity unit: "式", "組", "件", "支", "才", "片", "箱", "桶", "公尺", "平方公尺", "盞", "座".
-7. **Interior / Construction Projects**:
-   - Separate labor/service items and material items.
-   - Return at least 2 material items when physical materials are implied, unless the user says labor only.
-
-JSON Structure:
-{
-  "summary": "string (Short summary in Traditional Chinese)",
-  "expectedDays": "number | null",
-  "items": [
-    {
-      "id": "string (e.g., ai_1)",
-      "type": "service" | "material",
-      "description": "string (Task or material description in Traditional Chinese)",
-      "estimatedHours": number,
-      "suggestedRole": "string",
-      "unit": "string | null",
-      "hourlyRate": number,
-      "amount": number
-    }
-  ],
-  "proposalDraft": {
-    "coverTitle": "string",
-    "subtitle": "string",
-    "executiveSummary": "string",
-    "positioning": "string",
-    "priceSummary": "string",
-    "timelineSummary": "string",
-    "feeBoundary": "string",
-    "businessModel": ["string"],
-    "painPoints": ["string"],
-    "coreWorkflow": ["string"],
-    "modules": [
-      {
-        "id": "string (e.g. M1)",
-        "title": "string",
-        "bullets": ["string", "string", "string"]
-      }
-    ],
-    "includedScope": ["string"],
-    "excludedScope": ["string"],
-    "futureExpansion": ["string"],
-    "technicalStrategy": ["string"],
-    "timeline": [
-      { "title": "string", "duration": "string", "detail": "string" }
-    ],
-    "pricingStrategy": ["string"],
-    "paymentMilestones": [
-      { "stage": "string", "percentage": 30, "trigger": "string" }
-    ],
-    "ongoingFees": ["string"],
-    "testingCategories": [
-      { "name": "string", "description": "string" }
-    ],
-    "uatSteps": [
-      { "title": "string", "duration": "string", "responsible": "我方 | 業主 | 雙方" }
-    ],
-    "maintenanceTiers": [
-      { "tier": "Basic | Standard | Premium", "monthlyFee": "string", "hoursPool": "string", "regularSla": "string", "criticalSla": "string" }
-    ],
-    "contractProtection": ["string"],
-    "nextSteps": [
-      { "step": "string", "detail": "string", "timing": "string" }
-    ],
-    "conclusion": "string",
-    "keyTakeaways": ["string"]
-  }
-}
-
-Proposal Draft Rules:
-- Treat screenshots as source material, not decoration. Infer the project/product logic from them.
-- The proposalDraft should resemble a polished first-stage build proposal, with clear scope, boundaries, timeline, pricing logic, payment milestones, and next-stage expansion.
-- If screenshots show module names/features, preserve their module structure and rewrite it into implementation-oriented proposal language.
-- Avoid generic headings such as "我們深入理解了您的需求" as actual content. Use project-specific titles and bullets.
-- Be explicit about third-party API / AI / cloud / usage fees when relevant.
-- Include enough sections to form 10-13 slides when the input contains enough information.
-- Keep proposalDraft in Traditional Chinese (Taiwan), concise but complete enough to generate slides.
-- paymentMilestones: generate 4-6 structured stages with realistic percentages summing to 100 (e.g. 30% sign, 20% design, 20% mid-dev, 15% UAT, 10% acceptance, 5% mid-warranty).
-- testingCategories: list 6-10 major testing areas relevant to the project (e.g. 功能測試, 權限/多租戶, AI生成測試, 效能測試, 安全性測試, 瀏覽器裝置).
-- uatSteps: describe 5-8 concrete UAT stages with durations and responsible party (我方/業主/雙方).
-- maintenanceTiers: always provide 3 tiers (Basic, Standard, Premium) with realistic monthly fees and SLA.
-- contractProtection: 6-10 clear contract protection clauses relevant to this type of project.
-- nextSteps: 4-6 clear action steps after proposal acceptance, each with a short detail and rough timing.
-- **Consistency rule**: The priceSummary must reflect the actual total of the items array. Do not claim a price in the proposal that does not match the quoted items. The scope described in the proposal must not include features that have no corresponding quote item.
-
-Project Type Hint:
-${normalizedProjectType || "Not specified"}
-${isMaterialHeavyProject ? "This request likely requires explicit material line items." : "This request may be service-only unless materials are clearly implied."}
-
-Quote Template Context:
-${normalizedTemplateContext || "No selected quote template context."}
-
-User Requirements:
-${normalizedRequirements || "No additional user-entered requirements."}
-`;
+    const prompt = buildAnalyzePrompt({
+      normalizedProjectType,
+      normalizedRequirements,
+      normalizedTemplateContext,
+      isMaterialHeavyProject,
+    });
 
     console.log("Calling Gemini AI via official SDK with payload:", {
       modelName,
@@ -2310,6 +2192,7 @@ ${normalizedRequirements || "No additional user-entered requirements."}
             unit: normalizedType === "material" ? rawUnit || "式" : null,
             hourlyRate,
             amount: Math.round(hourlyRate * estimatedHours),
+            sourceEvidence: normalizeTextField(item?.sourceEvidence) || null,
           };
         })
       : [];
@@ -2320,6 +2203,32 @@ ${normalizedRequirements || "No additional user-entered requirements."}
       normalizedRequirements,
       normalizedItems,
     );
+
+    const VALID_PRICE_IMPACTS = new Set(["high", "medium", "low"]);
+    const normalizedMissingQuestions = Array.isArray(parsedResult?.missingQuestions)
+      ? parsedResult.missingQuestions
+          .filter((item) => item && typeof item === "object")
+          .map((item) => ({
+            question: normalizeTextField(item.question),
+            whyItMatters: normalizeTextField(item.whyItMatters),
+            priceImpact: VALID_PRICE_IMPACTS.has(item.priceImpact) ? item.priceImpact : "medium",
+          }))
+          .filter((item) => item.question)
+      : [];
+
+    const normalizedAssumptions = Array.isArray(parsedResult?.assumptions)
+      ? parsedResult.assumptions
+          .map((a) => normalizeTextField(a))
+          .filter(Boolean)
+      : [];
+
+    const rawConfidenceScore = Number(parsedResult?.confidenceScore);
+    const normalizedConfidenceScore =
+      Number.isFinite(rawConfidenceScore) &&
+      rawConfidenceScore >= 55 &&
+      rawConfidenceScore <= 92
+        ? Math.round(rawConfidenceScore)
+        : null;
 
     await prisma.workspace.update({
       where: { id: workspaceId },
@@ -2339,6 +2248,9 @@ ${normalizedRequirements || "No additional user-entered requirements."}
           ? Math.round(Number(parsedResult.expectedDays))
           : null,
       proposalDraft,
+      missingQuestions: normalizedMissingQuestions,
+      assumptions: normalizedAssumptions,
+      confidenceScore: normalizedConfidenceScore,
     });
   } catch (error) {
     console.error("CRITICAL AI Analysis error:", error);
@@ -2693,4 +2605,13 @@ Rules:
       apiKeyPresent: hasGeminiApiKey(),
     });
   }
+}
+
+/**
+ * GET /api/ai/baseline-display-names
+ * Returns the human-readable display names for all baseline keys.
+ * Auth required — keeps the mapping server-authoritative and avoids frontend duplication.
+ */
+export function getBaselineDisplayNames(req, res) {
+  return res.json({ success: true, displayNames: BASELINE_DISPLAY_NAMES });
 }

@@ -1,12 +1,15 @@
 import { Router } from "express";
 import {
   analyzeRequirements,
+  getBaselineDisplayNames,
   refineProposalSection,
   refineQuote,
   refineRoughEstimate,
   roughEstimate,
   translateQuote,
 } from "../controllers/aiController.js";
+import { parseConversation } from "../controllers/conversationController.js";
+import { estimateModules } from "../controllers/estimationController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
@@ -17,7 +20,10 @@ router.post("/rough-estimate", roughEstimate);
 // Protect all other AI routes
 router.use(authMiddleware);
 
+router.get("/baseline-display-names", getBaselineDisplayNames);
 router.post("/analyze", analyzeRequirements);
+router.post("/parse-conversation", parseConversation);
+router.post("/estimate-modules", estimateModules);
 router.post("/translate-quote", translateQuote);
 router.post("/refine-quote", refineQuote);
 router.post("/refine-proposal-section", refineProposalSection);
