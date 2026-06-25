@@ -76,6 +76,8 @@ function confidenceLevelFromSampleSize(n) {
  * @param {string[]} params.missingInfo
  * @param {string[]} params.projectRiskFlags
  * @param {object|null} params.requirementSpec
+ * @param {string|null} params.parentSnapshotId   - conversational refine: the snapshot this revision derives from
+ * @param {number} params.revisionNumber          - 1 for first estimate, +1 per refine
  */
 export async function saveEstimateSnapshot({
   workspaceId,
@@ -89,6 +91,8 @@ export async function saveEstimateSnapshot({
   missingInfo,
   projectRiskFlags,
   requirementSpec = null,
+  parentSnapshotId = null,
+  revisionNumber = 1,
 }) {
   const modulesArray = Array.isArray(modules) ? modules : [];
   const avgMultiplier =
@@ -104,6 +108,8 @@ export async function saveEstimateSnapshot({
     data: {
       workspaceId,
       quoteId,
+      parentSnapshotId,
+      revisionNumber: Number.isFinite(revisionNumber) && revisionNumber >= 1 ? revisionNumber : 1,
       baselineVersion: CURRENT_BASELINE_VERSION,
       detectedModules: modulesArray,
       baselineHours,

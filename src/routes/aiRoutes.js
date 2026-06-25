@@ -9,7 +9,7 @@ import {
   translateQuote,
 } from "../controllers/aiController.js";
 import { parseConversation } from "../controllers/conversationController.js";
-import { estimateModules } from "../controllers/estimationController.js";
+import { estimateModules, refineEstimate } from "../controllers/estimationController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
@@ -24,6 +24,7 @@ router.get("/baseline-display-names", getBaselineDisplayNames);
 router.post("/analyze", analyzeRequirements);
 router.post("/parse-conversation", parseConversation);
 router.post("/estimate-modules", estimateModules);
+router.post("/refine-estimate", refineEstimate);
 router.post("/translate-quote", translateQuote);
 router.post("/refine-quote", refineQuote);
 router.post("/refine-proposal-section", refineProposalSection);

@@ -84,6 +84,67 @@ function normalizeRisks(value) {
 }
 
 /**
+ * Core: parse raw conversation text into a normalized RequirementSpec.
+ *
+ * Pure of Express — usable both by the parseConversation controller and by the
+ * conversational refine-estimate flow. Throws typed errors (statusCode/errorCode)
+ * for HTTP callers to translate; never writes a response.
+ *
+ * @param {object} params
+ * @param {string} params.rawInput
+ * @returns {Promise<object>} normalized requirementSpec
+ */
+export async function parseConversationCore({ rawInput }) {
+  const normalizedInput = typeof rawInput === "string" ? rawInput.trim() : "";
+  if (!normalizedInput) {
+    throw Object.assign(new Error("rawInput is required"), { statusCode: 400 });
+  }
+
+  const geminiClient = getGeminiClient();
+  if (!geminiClient) {
+    throw Object.assign(new Error("GOOGLE_GENERATIVE_AI_API_KEY is not configured"), {
+      statusCode: 500,
+    });
+  }
+
+  const modelName = getGeminiModelName("analyze");
+  const prompt = buildParseConversationPrompt({ rawInput: normalizedInput });
+
+  const text = await generateGeminiJsonText(geminiClient, [{ text: prompt }], {
+    modelName,
+    temperature: 0.1,
+  });
+
+  const cleanedText = normalizeJsonResponse(text);
+  let parsed;
+  try {
+    parsed = JSON.parse(cleanedText);
+  } catch (parseError) {
+    throw Object.assign(new Error("Failed to parse AI response as JSON"), {
+      statusCode: 500,
+      cause: parseError,
+    });
+  }
+
+  return {
+    rawInputType: VALID_RAW_INPUT_TYPES.has(parsed?.rawInputType) ? parsed.rawInputType : "mixed",
+    detectedLanguage: normalizeTextField(parsed?.detectedLanguage) || "zh-TW",
+    conversationSummary: normalizeTextField(parsed?.conversationSummary),
+    detectedSpeakers: normalizeSpeakers(parsed?.detectedSpeakers),
+    clientIntent: normalizeTextField(parsed?.clientIntent),
+    projectType: normalizeTextField(parsed?.projectType),
+    businessGoal: normalizeTextField(parsed?.businessGoal),
+    targetUsers: normalizeStringArray(parsed?.targetUsers),
+    platforms: normalizeStringArray(parsed?.platforms),
+    requirements: normalizeRequirements(parsed?.requirements),
+    missingQuestions: normalizeMissingQuestions(parsed?.missingQuestions),
+    assumptions: normalizeStringArray(parsed?.assumptions),
+    exclusions: normalizeStringArray(parsed?.exclusions),
+    risks: normalizeRisks(parsed?.risks),
+  };
+}
+
+/**
  * Parse a raw conversation / email / meeting-notes input into a structured RequirementSpec.
  * POST /api/ai/parse-conversation
  *
@@ -93,90 +154,38 @@ function normalizeRisks(value) {
  */
 export async function parseConversation(req, res) {
   try {
-    const { rawInput } = req.body;
-    const normalizedInput = typeof rawInput === "string" ? rawInput.trim() : "";
-
-    if (!normalizedInput) {
-      return res.status(400).json({ success: false, message: "rawInput is required" });
-    }
-
-    const geminiClient = getGeminiClient();
-    if (!geminiClient) {
-      return res.status(500).json({
-        success: false,
-        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
-      });
-    }
-
-    const modelName = getGeminiModelName("analyze");
-    const prompt = buildParseConversationPrompt({ rawInput: normalizedInput });
-
-    let text;
-    try {
-      text = await generateGeminiJsonText(geminiClient, [{ text: prompt }], {
-        modelName,
-        temperature: 0.1,
-      });
-    } catch (error) {
-      const statusCode = extractGeminiStatusCode(error);
-      const retryAfterSeconds = extractGeminiRetryAfterSeconds(error, 20);
-
-      if (statusCode === 429) {
-        res.set("Retry-After", String(retryAfterSeconds));
-        return res.status(429).json({
-          success: false,
-          message: `AI 服務忙碌，請 ${retryAfterSeconds} 秒後重試。`,
-          errorCode: "AI_RATE_LIMIT",
-          retryAfterSeconds,
-        });
-      }
-
-      if (isGeminiRetryableStatus(statusCode)) {
-        return res.status(503).json({
-          success: false,
-          message: "AI 服務暫時不可用，請稍後重試。",
-          errorCode: "AI_TEMP_UNAVAILABLE",
-        });
-      }
-
-      throw error;
-    }
-
-    const cleanedText = normalizeJsonResponse(text);
-    let parsed;
-    try {
-      parsed = JSON.parse(cleanedText);
-    } catch (parseError) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to parse AI response as JSON",
-        error: parseError.message,
-      });
-    }
-
-    const requirementSpec = {
-      rawInputType: VALID_RAW_INPUT_TYPES.has(parsed?.rawInputType) ? parsed.rawInputType : "mixed",
-      detectedLanguage: normalizeTextField(parsed?.detectedLanguage) || "zh-TW",
-      conversationSummary: normalizeTextField(parsed?.conversationSummary),
-      detectedSpeakers: normalizeSpeakers(parsed?.detectedSpeakers),
-      clientIntent: normalizeTextField(parsed?.clientIntent),
-      projectType: normalizeTextField(parsed?.projectType),
-      businessGoal: normalizeTextField(parsed?.businessGoal),
-      targetUsers: normalizeStringArray(parsed?.targetUsers),
-      platforms: normalizeStringArray(parsed?.platforms),
-      requirements: normalizeRequirements(parsed?.requirements),
-      missingQuestions: normalizeMissingQuestions(parsed?.missingQuestions),
-      assumptions: normalizeStringArray(parsed?.assumptions),
-      exclusions: normalizeStringArray(parsed?.exclusions),
-      risks: normalizeRisks(parsed?.risks),
-    };
-
+    const requirementSpec = await parseConversationCore({ rawInput: req.body?.rawInput });
     return res.json({ success: true, requirementSpec });
   } catch (error) {
+    const statusCode = extractGeminiStatusCode(error);
+    const retryAfterSeconds = extractGeminiRetryAfterSeconds(error, 20);
+
+    if (statusCode === 429) {
+      res.set("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({
+        success: false,
+        message: `AI 服務忙碌，請 ${retryAfterSeconds} 秒後重試。`,
+        errorCode: "AI_RATE_LIMIT",
+        retryAfterSeconds,
+      });
+    }
+
+    if (isGeminiRetryableStatus(statusCode)) {
+      return res.status(503).json({
+        success: false,
+        message: "AI 服務暫時不可用，請稍後重試。",
+        errorCode: "AI_TEMP_UNAVAILABLE",
+      });
+    }
+
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
     console.error("[parseConversation] Error:", error);
-    return res.status(500).json({
+    return res.status(error?.statusCode || 500).json({
       success: false,
-      message: "Failed to parse conversation",
+      message: error?.statusCode === 500 && error.message ? error.message : "Failed to parse conversation",
       error: error.message,
     });
   }

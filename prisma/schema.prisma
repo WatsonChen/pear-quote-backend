@@ -24,6 +24,7 @@ model Workspace {
   estimateAdjustments    EstimateAdjustment[]
   calibrationProfile     TeamCalibrationProfile?
   calibrationAuditLogs   CalibrationAuditLog[]
+  creditCompensations    CreditCompensation[]
 }
 
 model WorkspaceUser {
@@ -130,14 +131,16 @@ model EstimateSnapshot {
   id                        String              @id @default(uuid())
   workspaceId               String
   quoteId                   String?
+  parentSnapshotId          String?
+  revisionNumber            Int                 @default(1)
   baselineVersion           String              @default("1")
   detectedModules           Json
   baselineHours             Json
   complexityMultiplier      Float               @default(1.0)
   riskBuffer                Float               @default(0)
-  rawGlobalEstimate         Json                // Before team calibration — immutable record
-  calibratedEstimate        Json?               // After team calibration applied at generation time
-  calibrationFactorsApplied Json?               // Snapshot of profile factors used at generation time
+  rawGlobalEstimate         Json
+  calibratedEstimate        Json?
+  calibrationFactorsApplied Json?
   originalHoursRange        Json
   confidenceScore           Float?
   missingInfo               Json?
@@ -147,6 +150,10 @@ model EstimateSnapshot {
   workspace                 Workspace           @relation(fields: [workspaceId], references: [id])
   quote                     Quote?              @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   adjustment                EstimateAdjustment?
+  parent                    EstimateSnapshot?   @relation("SnapshotRevisions", fields: [parentSnapshotId], references: [id], onDelete: SetNull)
+  revisions                 EstimateSnapshot[]  @relation("SnapshotRevisions")
+
+  @@unique([parentSnapshotId])
 }
 
 model EstimateAdjustment {
@@ -235,4 +242,16 @@ model User {
   termsVersionAccepted String?
   bookingUrl           String?
   workspaces           WorkspaceUser[]
+}
+
+model CreditCompensation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  amount      Int
+  operation   String
+  status      String    @default("pending")
+  error       String?
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 }

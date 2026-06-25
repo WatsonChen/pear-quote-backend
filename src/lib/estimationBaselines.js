@@ -768,3 +768,49 @@ export async function getBaselineByKey(baselineKey, workspaceId) {
   const baselines = await getEstimationBaselines(workspaceId);
   return baselines.find((b) => b.baselineKey === baselineKey) ?? null;
 }
+
+/**
+ * Resolve a baselineKey to its human-readable display name.
+ * Falls back to the provided fallback (usually baseline.name) and finally the key itself.
+ *
+ * @param {string} baselineKey
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export function resolveBaselineDisplayName(baselineKey, fallback = "") {
+  if (baselineKey && BASELINE_DISPLAY_NAMES[baselineKey]) {
+    return BASELINE_DISPLAY_NAMES[baselineKey];
+  }
+  return fallback || baselineKey || "";
+}
+
+/**
+ * Replace any bare baselineKey tokens that leaked into AI-generated requirementQuestions
+ * text with their human-readable display name (BASELINE_DISPLAY_NAMES).
+ *
+ * The estimate-modules / parse-conversation prompts occasionally echo an internal key
+ * (e.g. "corporate_site_with_cms") inside a question. Clients must never see raw keys, so
+ * this normalization runs in the response layer — not as a frontend string.replace hack.
+ *
+ * Matching is whole-token (word-boundary-ish) and case-sensitive to the snake_case keys,
+ * so ordinary Chinese/English prose is untouched.
+ *
+ * @param {string[]} questions
+ * @returns {string[]}
+ */
+export function humanizeBaselineKeysInQuestions(questions) {
+  if (!Array.isArray(questions)) return [];
+  // Longest keys first so e.g. corporate_site_with_cms is replaced before corporate_site_static prefixes.
+  const keys = Object.keys(BASELINE_DISPLAY_NAMES).sort((a, b) => b.length - a.length);
+  return questions.map((raw) => {
+    let q = typeof raw === "string" ? raw : "";
+    if (!q) return q;
+    for (const key of keys) {
+      if (!q.includes(key)) continue;
+      // Replace the key only when it is not part of a longer snake_case identifier.
+      const pattern = new RegExp(`(^|[^a-zA-Z0-9_])${key}(?![a-zA-Z0-9_])`, "g");
+      q = q.replace(pattern, (_m, pre) => `${pre}${BASELINE_DISPLAY_NAMES[key]}`);
+    }
+    return q;
+  });
+}
