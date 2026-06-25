@@ -168,23 +168,68 @@ WHERE table_name = 'EstimateSnapshot'
 
 ### B-6：確認 _prisma_migrations tracking 狀態
 
-```sql
-SELECT migration_name, finished_at, applied_steps_count
-FROM _prisma_migrations
-ORDER BY migration_name;
-```
+> **重要：** 不要以 total row count 作為通過標準。`_prisma_migrations` 可能包含 `rolled_back_at IS NOT NULL` 的歷史 rolled-back 紀錄（不是 active unfinished，不是 blocker）。
 
-**通過條件：**  
-- 13 筆 migration 都出現（名稱前綴 20251216 ~ 20260625）  
-- 全部 `finished_at` 非 NULL  
-- 全部 `applied_steps_count` ≥ 1
-
-若 `_prisma_migrations` 表格不存在：
+**Step 1 — 確認 active unfinished migration 數量為 0**
 
 ```sql
--- 表示 migration tracking 從未初始化
--- 需執行 Runbook C 重新 baseline
+SELECT COUNT(*) AS active_unfinished
+FROM "_prisma_migrations"
+WHERE finished_at IS NULL
+  AND rolled_back_at IS NULL;
 ```
+
+**通過條件：** `active_unfinished = 0`
+
+- `finished_at IS NULL AND rolled_back_at IS NULL` = 真正未完成的 migration（**blocker**）
+- `finished_at IS NULL AND rolled_back_at IS NOT NULL` = 歷史 rolled-back 紀錄（非 blocker，不需處理）
+
+若有 `active_unfinished > 0`：**停止**，須先手動處理後再繼續。
+
+---
+
+**Step 2 — 確認每一筆 expected migration 的狀態**
+
+```sql
+WITH expected(migration_name) AS (
+  VALUES
+    ('20251216041525_init_schema'),
+    ('20260102062918_init'),
+    ('20260102074702_update_schema_ui'),
+    ('20260116095736_add_user_id'),
+    ('20260422000000_add_terms_acceptance_fields'),
+    ('20260429000000_add_proposal_sharing_fields'),
+    ('20260507000000_add_generation_type'),
+    ('20260507001000_add_quote_item_rate_metadata'),
+    ('20260616000000_add_estimation_baselines'),
+    ('20260623000000_add_calibration_tables'),
+    ('20260623001000_calibration_v2'),
+    ('20260625000000_add_snapshot_revision_lineage'),
+    ('20260625010000_add_credit_compensation')
+)
+SELECT
+  e.migration_name,
+  CASE
+    WHEN m.migration_name IS NULL     THEN 'MISSING'
+    WHEN m.rolled_back_at IS NOT NULL THEN 'ROLLED_BACK'
+    WHEN m.finished_at IS NULL        THEN 'ACTIVE_UNFINISHED'
+    ELSE                                   'APPLIED'
+  END AS status
+FROM expected e
+LEFT JOIN "_prisma_migrations" m USING (migration_name)
+ORDER BY e.migration_name;
+```
+
+**通過條件：**
+
+| status | 說明 | 是否通過 |
+|--------|------|---------|
+| `APPLIED` | 正常套用 | ✅ |
+| `ROLLED_BACK` | 歷史 rolled-back 紀錄，可接受 | ✅ |
+| `MISSING` | Schema 已存在但未記錄 tracking → 需跑 Runbook D | ⚠️ 見 Runbook D |
+| `ACTIVE_UNFINISHED` | 真正卡住的未完成 migration | ❌ 停止 |
+
+若 `_prisma_migrations` 表格不存在，此 SQL 會報錯 → 需執行完整 Runbook C 重新 baseline。
 
 ### B-7：確認 Workspace 表格欄位（含 creditBalance）
 
@@ -239,6 +284,56 @@ npx prisma migrate resolve --applied 20260625010000_add_credit_compensation
 npx prisma migrate status
 # 預期：Database schema is up to date!
 ```
+
+---
+
+## Runbook D：Schema 已存在、migration tracking 部分缺失
+
+**使用時機：** Runbook B schema checks（B-2 ～ B-8）全部 PASS，但 B-6 Step 2 顯示有 `MISSING` migration，且對應 schema 欄位/表格已確認存在。
+
+> **此情境不執行任何 DDL / schema-changing SQL。**
+> 只用 `migrate resolve --applied` 補齊 tracking 紀錄。
+> **不要執行 `migrate deploy`**（schema 已存在，deploy 會嘗試重跑 DDL 並可能失敗或毀壞資料）。
+
+### 前置確認（必須全部通過才可繼續）
+
+- [ ] B-2：13 張表全部存在（含 CreditCompensation）
+- [ ] B-3：EstimateSnapshot 有 parentSnapshotId / revisionNumber / rawGlobalEstimate
+- [ ] B-4：parentSnapshotId unique constraint + FK 存在（2 列）
+- [ ] B-5：originalEstimateRange 不存在（0 列）
+- [ ] B-6 Step 1：`active_unfinished = 0`
+- [ ] B-6 Step 2：無 `ACTIVE_UNFINISHED` migration
+- [ ] B-7：Workspace.creditBalance 存在
+- [ ] B-8：CreditCompensation 8 個欄位存在
+- [ ] 確認 MISSING 的 migration 對應 schema 已在 B-3 ～ B-8 中驗證存在
+
+### 執行 resolve
+
+**僅 resolve 確認 MISSING 的 migration，逐一執行，不要批次：**
+
+```bash
+DATABASE_URL="<production_url>" npx prisma migrate resolve --applied 20260623000000_add_calibration_tables
+DATABASE_URL="<production_url>" npx prisma migrate resolve --applied 20260623001000_calibration_v2
+DATABASE_URL="<production_url>" npx prisma migrate resolve --applied 20260625000000_add_snapshot_revision_lineage
+DATABASE_URL="<production_url>" npx prisma migrate resolve --applied 20260625010000_add_credit_compensation
+```
+
+### 不應執行的操作
+
+- ❌ 不要 resolve `20260422000000_add_terms_acceptance_fields`（已在 `_prisma_migrations` 有 `rolled_back_at IS NOT NULL` 紀錄，不需重複操作）
+- ❌ 不要 resolve 已是 `APPLIED` 狀態的 migration
+- ❌ 不要執行 `migrate deploy`
+- ❌ 不要執行任何 schema-changing SQL
+
+### 驗證
+
+```bash
+DATABASE_URL="<production_url>" npx prisma migrate status
+# 預期：Database schema is up to date!
+# 20260422 若顯示 rolled back 不算 error，Prisma 可接受
+```
+
+resolve 完成後，重跑 B-6 Step 2，確認全部顯示 `APPLIED` 或 `ROLLED_BACK`，無 `MISSING`。
 
 ---
 
