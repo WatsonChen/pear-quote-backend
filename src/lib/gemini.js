@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const DEFAULT_MODEL_NAME = "gemini-2.0-flash";
-const DEFAULT_ROUGH_ESTIMATE_MODEL_NAME = "gemini-2.0-flash";
+const DEFAULT_ROUGH_ESTIMATE_MODEL_NAME = "gemini-2.5-flash-lite";
 const DEFAULT_ANALYZE_MODEL_NAME = "gemini-2.5-pro";
 const DEFAULT_ANALYTICS_MODEL_NAME = "gemini-2.0-flash";
 const DEFAULT_REFINE_ROUGH_MODEL_NAME = "gemini-2.5-pro";
