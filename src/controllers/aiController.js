@@ -2355,7 +2355,7 @@ export async function roughEstimate(req, res) {
 
     const outputLanguageInstruction = useChinese
       ? "IMPORTANT: You MUST write ALL text fields (priceRange, timeline, confidence, confidenceHint, confidenceActions, breakdown labels and descriptions, assumptions, note) in Traditional Chinese (繁體中文). Do NOT use English in any of these fields. Use TWD (NT$) for prices."
-      : "Write all text fields in English. Use USD for prices unless the description clearly implies another currency.";
+      : "IMPORTANT: You MUST write ALL text fields (priceRange, timeline, confidence, confidenceHint, confidenceActions, breakdown labels and descriptions, assumptions, note) in English. Do NOT use any other language in these fields, even if the project description is written in another language. Use USD for prices unless the description clearly implies another currency.";
 
     const hasImages = normalizedImageBase64List.length > 0;
     const imageSummaryField = hasImages
@@ -2536,8 +2536,8 @@ export async function refineRoughEstimate(req, res) {
 
     const modelName = getGeminiModelName("refineRough");
     const outputLanguageInstruction = useChinese
-      ? "You MUST write ALL text fields in Traditional Chinese (繁體中文). Use TWD (NT$) for prices."
-      : "Write all text fields in English. Use USD for prices.";
+      ? "IMPORTANT: You MUST write ALL text fields in Traditional Chinese (繁體中文). Do NOT use English in any of these fields. Use TWD (NT$) for prices."
+      : "IMPORTANT: You MUST write ALL text fields in English. Do NOT use any other language in these fields, even if the project description is written in another language. Use USD for prices.";
 
     const flashBreakdownText = flashBreakdown
       .map((item) => `- ${item.label}: ${item.description} (${item.effort})`)
