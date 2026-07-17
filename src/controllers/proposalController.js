@@ -3,87 +3,9 @@ import {
   sendProposalAcceptedNotification,
   sendProposalViewedNotification,
 } from "../services/proposalNotificationService.js";
+import { serializePublicProposal, resolveOwnerUser } from "../lib/proposalSerializer.js";
 
 const TERMINAL_PROPOSAL_STATUSES = new Set(["accepted", "rejected"]);
-
-function resolveOwnerUser(workspace) {
-  const workspaceUsers = workspace?.users || [];
-  return (
-    workspaceUsers.find((item) => item.role === "OWNER")?.user ||
-    workspaceUsers[0]?.user ||
-    null
-  );
-}
-
-function buildBookingUrl(user) {
-  if (user?.bookingUrl) {
-    return user.bookingUrl;
-  }
-
-  return user?.email ? `mailto:${user.email}` : null;
-}
-
-function buildCompanyInfo(settings, ownerUser) {
-  return {
-    name: settings?.companyName || "PearQuote",
-    email: settings?.contactEmail || ownerUser?.email || null,
-    taxId: settings?.taxId || null,
-    companySealUrl: settings?.companySealUrl || null,
-    quoteValidityDays: settings?.quoteValidityDays || 30,
-  };
-}
-
-/**
- * Serializes a quote into a client-safe proposal response.
- * WHITELIST APPROACH: only explicitly listed fields are returned.
- * Internal estimate fields (internalRange, calibration, _fieldVisibility, etc.)
- * are never included — they exist only in /api/ai/estimate-modules admin responses.
- */
-function serializePublicProposal(quote) {
-  const ownerUser = resolveOwnerUser(quote.workspace);
-  const settings = quote.workspace?.settings || {};
-  const companyInfo = buildCompanyInfo(settings, ownerUser);
-
-  return {
-    shareToken: quote.shareToken,
-    proposalStatus: quote.proposalStatus,
-    acceptedAt: quote.acceptedAt,
-    bookingUrl: buildBookingUrl(ownerUser),
-    ownerEmail: companyInfo.email,
-    proposalContent: quote.proposalContent || null,
-    proposalTheme: quote.proposalTheme || null,
-    quote: {
-      id: quote.shareToken,
-      shareToken: quote.shareToken,
-      customerName: quote.customerName,
-      contactEmail: quote.customer?.email || null,
-      projectName: quote.projectName,
-      projectType: quote.projectType,
-      expectedDays: quote.expectedDays,
-      description: quote.description,
-      totalAmount: quote.totalAmount,
-      paymentTerms: quote.paymentTerms,
-      validityDays: quote.validityDays,
-      createdAt: quote.createdAt,
-      updatedAt: quote.updatedAt,
-      proposalStatus: quote.proposalStatus,
-      acceptedAt: quote.acceptedAt,
-      proposalContent: quote.proposalContent || null,
-      proposalTheme: quote.proposalTheme || null,
-      items: (quote.items || []).map((item, index) => ({
-        id: `${quote.shareToken}-${index + 1}`,
-        description: item.description,
-        estimatedHours: item.estimatedHours,
-        suggestedRole: item.suggestedRole,
-        hourlyRate: item.hourlyRate,
-        amount: item.amount,
-        type: item.type,
-        unit: item.unit,
-      })),
-    },
-    companyInfo,
-  };
-}
 
 async function findPublicProposal(shareToken) {
   return prisma.quote.findUnique({
