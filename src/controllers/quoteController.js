@@ -1,5 +1,10 @@
 import crypto from "node:crypto";
 import prisma from "../lib/prisma.js";
+import {
+  assertValidWonAmount,
+  linkEstimateSnapshotToQuote,
+  syncQuoteWonOutcome,
+} from "../modules/outcome-learning/outcomeLearningService.js";
 
 const PROPOSAL_STATUSES = new Set([
   "draft",
@@ -1475,6 +1480,7 @@ export async function createQuote(req, res) {
       proposalStatus,
       proposalContent,
       proposalTheme,
+      estimateSnapshotId, // Outcome Learning: latest revision snapshot this quote was built from (optional)
     } = req.body;
 
     const workspaceId = req.workspace?.id;
@@ -1501,39 +1507,55 @@ export async function createQuote(req, res) {
     // But based on schema, we have totalMargin and totalCost.
     // Let's just save what we have.
 
-    const quote = await prisma.quote.create({
-      data: {
-        customerName: cleanOptionalString(customerName) || "未命名客戶",
-        ...(resolvedCustomerId ? { customerId: resolvedCustomerId } : {}),
-        projectName: cleanOptionalString(projectName) || "未命名專案",
-        projectType: cleanOptionalString(projectType) || "general",
-        generationType: normalizeGenerationType(generationType),
-        createdAt: normalizeCreatedAt(createdAt),
-        expectedDays: parseOptionalInt(expectedDays, null),
-        description: cleanOptionalString(description) || null,
-        status: "DRAFT",
-        shareToken: crypto.randomUUID(),
-        proposalStatus: normalizeProposalStatus(proposalStatus) || "draft",
-        proposalContent: proposalContent || null,
-        proposalTheme: proposalTheme || null,
-        totalAmount,
-        wonAmount:
-          wonAmount === undefined || wonAmount === null || wonAmount === ""
-            ? null
-            : toSafeNumber(wonAmount), // Add
-        paymentTerms: cleanOptionalString(paymentTerms) || null, // Add
-        validityDays: parseOptionalInt(validityDays, 30), // Add with default
-        workspaceId,
-        roleRates: roleRates || null,
-        materials: materials || null,
-        items: {
-          create: normalizedItems,
+    const quote = await prisma.$transaction(async (tx) => {
+      const createdQuote = await tx.quote.create({
+        data: {
+          customerName: cleanOptionalString(customerName) || "未命名客戶",
+          ...(resolvedCustomerId ? { customerId: resolvedCustomerId } : {}),
+          projectName: cleanOptionalString(projectName) || "未命名專案",
+          projectType: cleanOptionalString(projectType) || "general",
+          generationType: normalizeGenerationType(generationType),
+          createdAt: normalizeCreatedAt(createdAt),
+          expectedDays: parseOptionalInt(expectedDays, null),
+          description: cleanOptionalString(description) || null,
+          status: "DRAFT",
+          shareToken: crypto.randomUUID(),
+          proposalStatus: normalizeProposalStatus(proposalStatus) || "draft",
+          proposalContent: proposalContent || null,
+          proposalTheme: proposalTheme || null,
+          totalAmount,
+          wonAmount:
+            wonAmount === undefined || wonAmount === null || wonAmount === ""
+              ? null
+              : toSafeNumber(wonAmount), // Add
+          paymentTerms: cleanOptionalString(paymentTerms) || null, // Add
+          validityDays: parseOptionalInt(validityDays, 30), // Add with default
+          workspaceId,
+          roleRates: roleRates || null,
+          materials: materials || null,
+          items: {
+            create: normalizedItems,
+          },
         },
-      },
-      include: {
-        items: true,
-        customer: true,
-      },
+        include: {
+          items: true,
+          customer: true,
+        },
+      });
+
+      const linkResult = await linkEstimateSnapshotToQuote({
+        tx,
+        estimateSnapshotId,
+        quoteId: createdQuote.id,
+        workspaceId,
+      });
+      if (!linkResult.linked) {
+        console.warn(
+          `[outcome-learning] quote ${createdQuote.id} snapshot link skipped: ${linkResult.reason}`,
+        );
+      }
+
+      return createdQuote;
     });
 
     return res.status(201).json(quote);
@@ -1665,6 +1687,23 @@ export async function updateQuote(req, res) {
       return res.status(404).json({ message: "Quote not found" });
     }
 
+    // Outcome Learning: marking a Quote WON is the source-of-truth deal
+    // event. Validate strictly BEFORE the transaction — toSafeNumber()
+    // below coerces invalid input to 0, which is fine for a plain field
+    // edit but must not silently pass as a real deal amount.
+    const isMarkingWon = status === "WON";
+    if (isMarkingWon) {
+      try {
+        assertValidWonAmount(wonAmount);
+      } catch (validationError) {
+        return res.status(validationError.statusCode || 400).json({
+          success: false,
+          message: validationError.message,
+          errorCode: validationError.errorCode,
+        });
+      }
+    }
+
     const hasCustomerId = Object.prototype.hasOwnProperty.call(
       req.body,
       "customerId",
@@ -1686,9 +1725,9 @@ export async function updateQuote(req, res) {
     );
 
     // Transaction to update quote and replace items
-    const updatedQuote = await prisma.$transaction(async (prisma) => {
+    const updatedQuote = await prisma.$transaction(async (tx) => {
       // 1. Update Quote details
-      const quote = await prisma.quote.update({
+      const quote = await tx.quote.update({
         where: { id },
         data: {
           customerName:
@@ -1742,16 +1781,36 @@ export async function updateQuote(req, res) {
         },
       });
 
-      // 2. If items provided, replace them
+      // 2. Outcome Learning: sync the existing adjustment's deal outcome.
+      //    Only runs when this update is the WON transition. Missing
+      //    snapshot/adjustment is a normal, silent skip (logged, not
+      //    surfaced) — it must never block the Quote WON transition itself.
+      //    A real persistence error propagates and rolls back this
+      //    transaction along with the Quote update above.
+      if (isMarkingWon) {
+        const syncResult = await syncQuoteWonOutcome({
+          tx,
+          quoteId: id,
+          workspaceId,
+          wonAmount,
+        });
+        if (!syncResult.synced) {
+          console.warn(
+            `[outcome-learning] quote ${id} marked WON but outcome sync skipped: ${syncResult.reason}`,
+          );
+        }
+      }
+
+      // 3. If items provided, replace them
       if (normalizedItems) {
         // Delete existing items
-        await prisma.quoteItem.deleteMany({
+        await tx.quoteItem.deleteMany({
           where: { quoteId: id },
         });
 
         // Create new items - only extract necessary fields
         if (normalizedItems.length > 0) {
-          await prisma.quoteItem.createMany({
+          await tx.quoteItem.createMany({
             data: normalizedItems.map((item) => ({
               quoteId: id,
               ...item,
