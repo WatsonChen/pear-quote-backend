@@ -54,6 +54,50 @@ function confidenceLevelFromSampleSize(n) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Outcome status integrity (Stage 3.6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PROJECT_STATUS_RANK = { draft: 0, sent: 1, accepted: 2, completed: 3 };
+const TERMINAL_INCOMPATIBLE_WITH_REJECTED = new Set(["accepted", "completed"]);
+
+/**
+ * Decides whether an EstimateAdjustment may move from currentStatus to
+ * requestedStatus. `rejected` sits outside the linear draft→sent→accepted→
+ * completed progression: it's only reachable from draft/sent, and is
+ * terminal in v1 (no path back out, not even to "draft").
+ *
+ * Pure function — no I/O, independently testable.
+ *
+ * @param {string} currentStatus
+ * @param {string} requestedStatus
+ * @returns {{allowed: boolean, reason: "same_status"|"forward"|"regression"|"terminal_conflict"}}
+ */
+export function resolveProjectStatusTransition(currentStatus, requestedStatus) {
+  if (currentStatus === requestedStatus) {
+    return { allowed: true, reason: "same_status" };
+  }
+
+  if (currentStatus === "rejected") {
+    return { allowed: false, reason: "terminal_conflict" };
+  }
+
+  if (requestedStatus === "rejected") {
+    if (TERMINAL_INCOMPATIBLE_WITH_REJECTED.has(currentStatus)) {
+      return { allowed: false, reason: "terminal_conflict" };
+    }
+    return { allowed: true, reason: "forward" };
+  }
+
+  const currentRank = PROJECT_STATUS_RANK[currentStatus] ?? 0;
+  const requestedRank = PROJECT_STATUS_RANK[requestedStatus] ?? 0;
+
+  if (requestedRank > currentRank) {
+    return { allowed: true, reason: "forward" };
+  }
+  return { allowed: false, reason: "regression" };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Snapshot
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -135,34 +179,52 @@ export async function saveEstimateSnapshot({
  * Save or update a user adjustment for a snapshot.
  * Validates that the snapshot belongs to the same workspace (cross-workspace guard).
  *
+ * Outcome status integrity (Stage 3.6): once an adjustment exists, a request
+ * whose projectStatus would regress it (e.g. accepted → sent) or conflict
+ * with a terminal status is ignored IN FULL — every field on the request is
+ * dropped, not just projectStatus. A stale "sent" request replaying after a
+ * deal closed must not rewrite the historical estimate/adjustment record
+ * either, or Estimate vs Actual and Pricing Preference would be learning
+ * from a report that was quietly edited after the fact. See
+ * resolveProjectStatusTransition for the allowed/ignored matrix.
+ *
+ * Fields omitted from the request (undefined) never overwrite existing
+ * values — only keys actually present in the call are written. For
+ * finalQuotedPrice / acceptedPrice / actualHoursByRole specifically, an
+ * explicit null is ALSO treated as "no value provided" rather than "clear
+ * it": no caller today has a real reason to null out deal-outcome history,
+ * so the conservative default is to preserve whatever is already recorded.
+ *
  * @param {object} params
  * @param {string} params.snapshotId
  * @param {string} params.workspaceId
- * @param {Array|null}  params.adjustedModules
- * @param {object|null} params.adjustedHoursByRole   - user's price-strategy adjustments (NOT actual hours)
- * @param {object|null} params.actualHoursByRole     - real tracked hours after project completes
- * @param {object|null} params.adjustedEstimateRange
- * @param {string|null} params.adjustmentReason
- * @param {number|null} params.finalQuotedPrice
- * @param {number|null} params.acceptedPrice
+ * @param {Array|undefined}  params.adjustedModules
+ * @param {object|undefined} params.adjustedHoursByRole   - user's price-strategy adjustments (NOT actual hours)
+ * @param {object|null|undefined} params.actualHoursByRole - real tracked hours after project completes
+ * @param {object|undefined} params.adjustedEstimateRange
+ * @param {string|null|undefined} params.adjustmentReason
+ * @param {number|null|undefined} params.finalQuotedPrice
+ * @param {number|null|undefined} params.acceptedPrice
  * @param {string}      params.projectStatus
- * @param {boolean}     params.scopeChanged
+ * @param {boolean|undefined} params.scopeChanged
+ * @param {object} [params.client]  - Prisma client/transaction to use (defaults to the module-level prisma singleton; injectable for tests)
  */
 export async function saveEstimateAdjustment({
   snapshotId,
   workspaceId,
-  adjustedModules = null,
-  adjustedHoursByRole = null,
-  actualHoursByRole = null,
-  adjustedEstimateRange = null,
-  adjustmentReason = null,
-  finalQuotedPrice = null,
-  acceptedPrice = null,
+  adjustedModules,
+  adjustedHoursByRole,
+  actualHoursByRole,
+  adjustedEstimateRange,
+  adjustmentReason,
+  finalQuotedPrice,
+  acceptedPrice,
   projectStatus = "draft",
-  scopeChanged = false,
+  scopeChanged,
+  client = prisma,
 }) {
   // Cross-workspace guard: verify snapshot belongs to this workspace
-  const snapshot = await prisma.estimateSnapshot.findFirst({
+  const snapshot = await client.estimateSnapshot.findFirst({
     where: { id: snapshotId, workspaceId },
     select: { id: true },
   });
@@ -172,32 +234,44 @@ export async function saveEstimateAdjustment({
     });
   }
 
-  return prisma.estimateAdjustment.upsert({
-    where: { snapshotId },
-    update: {
-      adjustedModules,
-      adjustedHoursByRole,
-      actualHoursByRole,
-      adjustedEstimateRange,
-      adjustmentReason,
-      finalQuotedPrice,
-      acceptedPrice,
-      projectStatus,
-      scopeChanged,
-      updatedAt: new Date(),
-    },
-    create: {
+  const existing = await client.estimateAdjustment.findUnique({ where: { snapshotId } });
+
+  if (existing) {
+    const transition = resolveProjectStatusTransition(existing.projectStatus, projectStatus);
+
+    if (!transition.allowed) {
+      console.warn(
+        `[calibration] projectStatus transition ignored: snapshotId=${snapshotId} current=${existing.projectStatus} requested=${projectStatus} reason=${transition.reason}`,
+      );
+      return existing;
+    }
+
+    const data = { projectStatus, updatedAt: new Date() };
+    if (adjustedModules !== undefined) data.adjustedModules = adjustedModules;
+    if (adjustedHoursByRole !== undefined) data.adjustedHoursByRole = adjustedHoursByRole;
+    if (actualHoursByRole !== undefined && actualHoursByRole !== null) data.actualHoursByRole = actualHoursByRole;
+    if (adjustedEstimateRange !== undefined) data.adjustedEstimateRange = adjustedEstimateRange;
+    if (adjustmentReason !== undefined) data.adjustmentReason = adjustmentReason;
+    if (finalQuotedPrice !== undefined && finalQuotedPrice !== null) data.finalQuotedPrice = finalQuotedPrice;
+    if (acceptedPrice !== undefined && acceptedPrice !== null) data.acceptedPrice = acceptedPrice;
+    if (scopeChanged !== undefined) data.scopeChanged = Boolean(scopeChanged);
+
+    return client.estimateAdjustment.update({ where: { snapshotId }, data });
+  }
+
+  return client.estimateAdjustment.create({
+    data: {
       snapshotId,
       workspaceId,
-      adjustedModules,
-      adjustedHoursByRole,
-      actualHoursByRole,
-      adjustedEstimateRange,
-      adjustmentReason,
-      finalQuotedPrice,
-      acceptedPrice,
+      adjustedModules: adjustedModules ?? null,
+      adjustedHoursByRole: adjustedHoursByRole ?? null,
+      actualHoursByRole: actualHoursByRole ?? null,
+      adjustedEstimateRange: adjustedEstimateRange ?? null,
+      adjustmentReason: adjustmentReason ?? null,
+      finalQuotedPrice: finalQuotedPrice ?? null,
+      acceptedPrice: acceptedPrice ?? null,
       projectStatus,
-      scopeChanged,
+      scopeChanged: Boolean(scopeChanged),
     },
   });
 }
