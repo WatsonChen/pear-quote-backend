@@ -138,15 +138,15 @@ export async function createAdjustment(req, res) {
     if (!snapshotId) return res.status(400).json({ success: false, message: "snapshotId is required" });
 
     const {
-      adjustedModules = null,
-      adjustedHoursByRole = null,
-      actualHoursByRole = null,
-      adjustedEstimateRange = null,
-      adjustmentReason = null,
-      finalQuotedPrice = null,
-      acceptedPrice = null,
+      adjustedModules,
+      adjustedHoursByRole,
+      actualHoursByRole,
+      adjustedEstimateRange,
+      adjustmentReason,
+      finalQuotedPrice,
+      acceptedPrice,
       projectStatus = "draft",
-      scopeChanged = false,
+      scopeChanged,
     } = req.body;
 
     const status = VALID_STATUSES.has(projectStatus) ? projectStatus : "draft";
@@ -159,6 +159,10 @@ export async function createAdjustment(req, res) {
       });
     }
 
+    // Fields left out of the request body must not overwrite existing
+    // values (see saveEstimateAdjustment) — only coerce/sanitize when the
+    // caller actually sent the key. `undefined` here means "not provided",
+    // distinct from an explicit `null`.
     const adjustment = await saveEstimateAdjustment({
       snapshotId,
       workspaceId,
@@ -166,11 +170,26 @@ export async function createAdjustment(req, res) {
       adjustedHoursByRole,
       actualHoursByRole,
       adjustedEstimateRange,
-      adjustmentReason: typeof adjustmentReason === "string" ? adjustmentReason.trim() || null : null,
-      finalQuotedPrice: typeof finalQuotedPrice === "number" ? finalQuotedPrice : null,
-      acceptedPrice: typeof acceptedPrice === "number" ? acceptedPrice : null,
+      adjustmentReason:
+        adjustmentReason === undefined
+          ? undefined
+          : typeof adjustmentReason === "string"
+            ? adjustmentReason.trim() || null
+            : null,
+      finalQuotedPrice:
+        finalQuotedPrice === undefined
+          ? undefined
+          : typeof finalQuotedPrice === "number"
+            ? finalQuotedPrice
+            : null,
+      acceptedPrice:
+        acceptedPrice === undefined
+          ? undefined
+          : typeof acceptedPrice === "number"
+            ? acceptedPrice
+            : null,
       projectStatus: status,
-      scopeChanged: Boolean(scopeChanged),
+      scopeChanged: scopeChanged === undefined ? undefined : Boolean(scopeChanged),
     });
 
     return res.status(201).json({ success: true, adjustmentId: adjustment.id, updatedAt: adjustment.updatedAt });
