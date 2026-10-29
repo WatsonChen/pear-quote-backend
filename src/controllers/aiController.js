@@ -2353,6 +2353,29 @@ export async function roughEstimate(req, res) {
       ),
     );
 
+    const respondWithRoughEstimateFallback = (fallbackReason) => {
+      const finalizedFallback = finalizeRoughEstimateResult({
+        parsed: buildRateLimitFallbackEstimate({
+          description: normalizedDescription,
+          hasImage,
+          useChinese,
+          retryAfterSeconds: DEFAULT_AI_RETRY_AFTER_SECONDS,
+        }),
+        description: normalizedDescription,
+        hasImage,
+        useChinese,
+        allowAiGuidance: false,
+      });
+      quota.commit();
+
+      return res.json({
+        ...finalizedFallback,
+        fallback: true,
+        fallbackReason,
+        retryAfterSeconds: DEFAULT_AI_RETRY_AFTER_SECONDS,
+      });
+    };
+
     const outputLanguageInstruction = useChinese
       ? "IMPORTANT: You MUST write ALL text fields (priceRange, timeline, confidence, confidenceHint, confidenceActions, breakdown labels and descriptions, assumptions, note) in Traditional Chinese (繁體中文). Do NOT use English in any of these fields. Use TWD (NT$) for prices."
       : "IMPORTANT: You MUST write ALL text fields (priceRange, timeline, confidence, confidenceHint, confidenceActions, breakdown labels and descriptions, assumptions, note) in English. Do NOT use any other language in these fields, even if the project description is written in another language. Use USD for prices unless the description clearly implies another currency.";
@@ -2466,7 +2489,21 @@ ${normalizedDescription || "(see attached images)"}
         });
       }
 
-      throw error;
+      // Any other AI-side failure (model retired/404, safety block, empty
+      // response...) must not dead-end the public demo: log enough to diagnose
+      // and serve the same system fallback used for rate limits.
+      console.error("roughEstimate Gemini call failed:", {
+        statusCode,
+        errorCode: error?.errorCode,
+        modelName,
+        fallbackModelNames,
+        message: error?.message,
+      });
+      // 402 = prepaid credits depleted, 401/403 = invalid/blocked key: needs a
+      // human, so tag it distinctly for log alerts.
+      return respondWithRoughEstimateFallback(
+        [401, 402, 403].includes(statusCode) ? "ai_billing_or_auth" : "ai_error",
+      );
     }
 
     const cleaned = normalizeJsonResponse(text);
@@ -2476,11 +2513,7 @@ ${normalizedDescription || "(see attached images)"}
       parsed = JSON.parse(cleaned);
     } catch (e) {
       console.error("roughEstimate JSON parse failed:", e, cleaned);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to parse AI response",
-        apiKeyPresent: true,
-      });
+      return respondWithRoughEstimateFallback("invalid_response");
     }
 
     const finalizedResult = finalizeRoughEstimateResult({
