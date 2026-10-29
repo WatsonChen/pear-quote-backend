@@ -7,6 +7,16 @@ import {
   normalizeJsonResponse,
 } from "../lib/gemini.js";
 import { generateAiJsonText, hasAiApiKey } from "../lib/llm.js";
+import {
+  VAGUE_CONFIDENCE_CAP,
+  applyRoughEstimatePricing,
+} from "../lib/roughEstimatePricing.js";
+import {
+  getCachedRoughEstimate,
+  makeRoughEstimateCacheKey,
+  setCachedRoughEstimate,
+} from "../lib/roughEstimateCache.js";
+import { buildRoughEstimatePrompt } from "../prompts/roughEstimatePrompt.js";
 import { buildAnalyzePrompt } from "../prompts/analyzePrompt.js";
 import { BASELINE_DISPLAY_NAMES } from "../lib/estimationBaselines.js";
 
@@ -2325,6 +2335,17 @@ export async function roughEstimate(req, res) {
       });
     }
 
+    // Identical briefs get the identical answer (and cost nothing) while the
+    // instance is warm. Image briefs are never cached.
+    const cacheKey = hasImage
+      ? null
+      : makeRoughEstimateCacheKey({ description: normalizedDescription, useChinese });
+    const cachedResult = cacheKey ? getCachedRoughEstimate(cacheKey) : null;
+    if (cachedResult) {
+      console.info("[AI] rough estimate served from cache");
+      return res.json(cachedResult);
+    }
+
     const aiAvailable = hasAiApiKey();
     if (!aiAvailable) {
       return res.status(500).json({
@@ -2366,64 +2387,11 @@ export async function roughEstimate(req, res) {
       });
     };
 
-    const outputLanguageInstruction = useChinese
-      ? "IMPORTANT: You MUST write ALL text fields (priceRange, timeline, confidence, confidenceHint, confidenceActions, breakdown labels and descriptions, assumptions, note) in Traditional Chinese (繁體中文). Do NOT use English in any of these fields. Use TWD (NT$) for prices."
-      : "IMPORTANT: You MUST write ALL text fields (priceRange, timeline, confidence, confidenceHint, confidenceActions, breakdown labels and descriptions, assumptions, note) in English. Do NOT use any other language in these fields, even if the project description is written in another language. Use USD for prices unless the description clearly implies another currency.";
-
-    const hasImages = normalizedImageBase64List.length > 0;
-    const imageSummaryField = hasImages
-      ? `  "imageSummary": "string (one paragraph describing the visual content of the attached images — list every module, feature, platform, and technology you can see; null if no images)"`
-      : `  "imageSummary": null`;
-
-    const prompt = `
-You are a senior software project estimator. Analyze the following project description and produce a rough quote preview.
-Return ONLY a valid JSON object matching this exact schema — no markdown, no explanation.
-
-Schema:
-{
-  "priceRange": "string (e.g. '$4,800 – $7,500' or 'NT$150,000 – NT$235,000')",
-  "timeline": "string (e.g. '4 – 6 weeks' or '4 – 6 週')",
-  "confidenceScore": "number (integer 55-92)",
-  "confidence": "string (must include confidenceScore as percentage, e.g. 'Draft confidence 82%' or '初步估計信心度 82%')",
-  "confidenceHint": "string | null (one short sentence; null when confidence is high)",
-  "confidenceActions": ["string", "string", "string"],
-  "breakdown": [
-    {
-      "label": "string (phase name, max 5 words)",
-      "description": "string (one sentence)",
-      "effort": "string (e.g. '18–28h')"
-    }
-  ],
-  "assumptions": ["string", "string", "string"],
-  "note": "string (one short disclaimer sentence)",
-${imageSummaryField}
-}
-
-Rules:
-- breakdown must have 3–5 items covering the major phases of the project.
-- assumptions must have exactly 3 items.
-- ${outputLanguageInstruction}
-- Keep breakdown labels concise and professional.
-- breakdown descriptions MUST name specific technologies, platforms, and integrations — e.g. "FB/IG/TikTok API", "HeyGen", "RAG 知識庫", "Stripe", "代理 IP 池". Generic phase names like "後端開發" alone are not acceptable; always state what is being built and with which tools.
-- confidenceScore must be based on requirement clarity and uncertainty, not a default value.
-- increase confidenceScore when scope is specific (clear features, constraints, stack, deliverables).
-- decrease confidenceScore when scope is vague, highly complex, or missing key constraints.
-- do not reuse the same confidence score across unrelated inputs unless the information quality is genuinely similar.
-- STANDARD PRICING BASELINE (adjust based on detailed requirements):
-  * Simple landing page / Website: $1,500 - $3,500 (NT$45,000 - NT$105,000)
-  * Basic Web App / CMS: $4,000 - $8,000 (NT$120,000 - NT$240,000)
-  * Complex Platform / SaaS: $10,000+ (NT$300,000+)
-  * E-commerce site: $5,000 - $12,000 (NT$150,000 - NT$360,000)
-  * Use these as a firm anchor to prevent wild price fluctuations between similar inputs. Keep the estimated ranges consistent and stable.
-- confidenceHint must be concise and practical.
-- confidenceActions must be concrete next inputs the user can add, not generic advice.
-- if confidenceScore >= 82: set confidenceHint to null and confidenceActions to [].
-- if confidenceScore is 72-81: provide confidenceHint + up to 2 confidenceActions.
-- if confidenceScore <= 71: provide confidenceHint + up to 3 confidenceActions.
-
-Project description:
-${normalizedDescription || "(see attached images)"}
-`.trim();
+    const prompt = buildRoughEstimatePrompt({
+      description: normalizedDescription,
+      useChinese,
+      hasImages: normalizedImageBase64List.length > 0,
+    });
 
     const parts = [{ text: prompt }];
     for (const image of normalizedImageBase64List) {
@@ -2500,15 +2468,39 @@ ${normalizedDescription || "(see attached images)"}
       return respondWithRoughEstimateFallback("invalid_response");
     }
 
+    // Price is derived from the model's hours, not taken from the model.
+    const pricing = applyRoughEstimatePricing(parsed, { useChinese });
+    if (!pricing.applied) {
+      console.error("roughEstimate: model returned no usable hours", cleaned.slice(0, 300));
+      return respondWithRoughEstimateFallback("invalid_response");
+    }
+
     const finalizedResult = finalizeRoughEstimateResult({
-      parsed,
+      parsed: pricing.result,
       description: normalizedDescription,
       hasImage,
       useChinese,
       allowAiGuidance: true,
     });
 
+    // A thin brief must not read as a reliable quote.
+    if (
+      pricing.quality === "vague" &&
+      finalizedResult.confidenceScore > VAGUE_CONFIDENCE_CAP
+    ) {
+      finalizedResult.confidenceScore = VAGUE_CONFIDENCE_CAP;
+      finalizedResult.confidence = formatConfidence(
+        VAGUE_CONFIDENCE_CAP,
+        normalizedDescription,
+        parsed?.confidence,
+      );
+      finalizedResult.confidenceLevel = "low";
+    }
+
     quota.commit();
+    if (cacheKey) {
+      setCachedRoughEstimate(cacheKey, finalizedResult);
+    }
     return res.json(finalizedResult);
   } catch (error) {
     console.error("roughEstimate error:", error);
