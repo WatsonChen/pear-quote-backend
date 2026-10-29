@@ -2,13 +2,11 @@ import prisma from "../lib/prisma.js";
 import {
   extractGeminiRetryAfterSeconds,
   extractGeminiStatusCode,
-  generateGeminiJsonText,
-  getGeminiClient,
   getGeminiModelName,
-  hasGeminiApiKey,
   isGeminiTemporaryStatus as isGeminiRetryableStatus,
   normalizeJsonResponse,
 } from "../lib/gemini.js";
+import { generateAiJsonText, hasAiApiKey } from "../lib/llm.js";
 import { buildAnalyzePrompt } from "../prompts/analyzePrompt.js";
 import { BASELINE_DISPLAY_NAMES } from "../lib/estimationBaselines.js";
 
@@ -1425,11 +1423,11 @@ export async function translateQuote(req, res) {
         .json({ success: false, message: "Quote not found" });
     }
 
-    const geminiClient = getGeminiClient();
-    if (!geminiClient) {
+    const aiAvailable = hasAiApiKey();
+    if (!aiAvailable) {
       return res.status(500).json({
         success: false,
-        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
+        message: "No AI provider is configured (set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY)",
         apiKeyPresent: false,
       });
     }
@@ -1478,15 +1476,12 @@ ${JSON.stringify(sourcePayload, null, 2)}
     try {
       const modelName = getGeminiModelName("analyze");
       const fallbackModelNames = buildAnalyzeFallbackModelNames();
-      const text = await generateGeminiJsonText(
-        geminiClient,
-        [{ text: prompt }],
-        {
-          modelName,
-          fallbackModelNames,
-          maxQueueWaitMs: TRANSLATE_QUEUE_WAIT_MS,
-        },
-      );
+      const text = await generateAiJsonText([{ text: prompt }], {
+        purpose: "analyze",
+        modelName,
+        fallbackModelNames,
+        maxQueueWaitMs: TRANSLATE_QUEUE_WAIT_MS,
+      });
       parsedResult = parseAiJsonPayload(text, "translation response");
     } catch (error) {
       const statusCode = extractGeminiStatusCode(error);
@@ -1644,8 +1639,8 @@ export async function refineQuote(req, res) {
           )
         : quote.expectedDays;
 
-    const geminiClient = getGeminiClient();
-    if (geminiClient) {
+    const aiAvailable = hasAiApiKey();
+    if (aiAvailable) {
       try {
         const modelName = getGeminiModelName("analyze");
         const fallbackModelNames = buildAnalyzeFallbackModelNames();
@@ -1675,15 +1670,12 @@ Source quote JSON:
 ${JSON.stringify(sourcePayload, null, 2)}
 `;
 
-        const text = await generateGeminiJsonText(
-          geminiClient,
-          [{ text: prompt }],
-          {
-            modelName,
-            fallbackModelNames,
-            maxQueueWaitMs: REFINE_QUEUE_WAIT_MS,
-          },
-        );
+        const text = await generateAiJsonText([{ text: prompt }], {
+          purpose: "analyze",
+          modelName,
+          fallbackModelNames,
+          maxQueueWaitMs: REFINE_QUEUE_WAIT_MS,
+        });
         const parsedResult = parseAiJsonPayload(text, "refinement response");
         const hoursById = new Map(
           Array.isArray(parsedResult?.items)
@@ -1844,11 +1836,11 @@ export async function refineProposalSection(req, res) {
         .json({ success: false, message: "Quote not found" });
     }
 
-    const geminiClient = getGeminiClient();
-    if (!geminiClient) {
+    const aiAvailable = hasAiApiKey();
+    if (!aiAvailable) {
       return res.status(500).json({
         success: false,
-        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
+        message: "No AI provider is configured (set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY)",
       });
     }
 
@@ -1891,15 +1883,12 @@ ${cleanInstruction || "(no specific instruction — improve clarity, structure, 
     try {
       const modelName = getGeminiModelName("analyze");
       const fallbackModelNames = buildAnalyzeFallbackModelNames();
-      text = await generateGeminiJsonText(
-        geminiClient,
-        [{ text: prompt }],
-        {
-          modelName,
-          fallbackModelNames,
-          maxQueueWaitMs: REFINE_QUEUE_WAIT_MS,
-        },
-      );
+      text = await generateAiJsonText([{ text: prompt }], {
+        purpose: "analyze",
+        modelName,
+        fallbackModelNames,
+        maxQueueWaitMs: REFINE_QUEUE_WAIT_MS,
+      });
     } catch (error) {
       const statusCode = extractGeminiStatusCode(error);
       const retryAfterSeconds = extractGeminiRetryAfterSeconds(
@@ -2034,11 +2023,11 @@ export async function analyzeRequirements(req, res) {
         .json({ message: "Requirements text or images are required" });
     }
 
-    const geminiClient = getGeminiClient();
-    if (!geminiClient) {
+    const aiAvailable = hasAiApiKey();
+    if (!aiAvailable) {
       return res.status(500).json({
         success: false,
-        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
+        message: "No AI provider is configured (set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY)",
         apiKeyPresent: false,
       });
     }
@@ -2081,7 +2070,8 @@ export async function analyzeRequirements(req, res) {
     let text;
     try {
       const fallbackModelNames = buildAnalyzeFallbackModelNames();
-      text = await generateGeminiJsonText(geminiClient, parts, {
+      text = await generateAiJsonText(parts, {
+        purpose: "analyze",
         modelName,
         fallbackModelNames,
         maxQueueWaitMs: ANALYZE_QUEUE_WAIT_MS,
@@ -2260,7 +2250,7 @@ export async function analyzeRequirements(req, res) {
       message: "Failed to analyze requirements",
       error: error.message,
       stack: error.stack,
-      apiKeyPresent: hasGeminiApiKey(),
+      apiKeyPresent: hasAiApiKey(),
     });
   }
 }
@@ -2335,11 +2325,11 @@ export async function roughEstimate(req, res) {
       });
     }
 
-    const geminiClient = getGeminiClient();
-    if (!geminiClient) {
+    const aiAvailable = hasAiApiKey();
+    if (!aiAvailable) {
       return res.status(500).json({
         success: false,
-        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
+        message: "No AI provider is configured (set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY)",
         apiKeyPresent: false,
       });
     }
@@ -2443,7 +2433,8 @@ ${normalizedDescription || "(see attached images)"}
 
     let text;
     try {
-      text = await generateGeminiJsonText(geminiClient, parts, {
+      text = await generateAiJsonText(parts, {
+        purpose: "roughEstimate",
         modelName,
         fallbackModelNames,
         maxQueueWaitMs: ROUGH_ESTIMATE_QUEUE_WAIT_MS,
@@ -2480,29 +2471,22 @@ ${normalizedDescription || "(see attached images)"}
         });
       }
 
-      if (isGeminiRetryableStatus(statusCode)) {
-        return res.status(503).json({
-          success: false,
-          message: getUnavailableMessage(useChinese),
-          errorCode: "AI_TEMP_UNAVAILABLE",
-          apiKeyPresent: true,
-        });
-      }
-
-      // Any other AI-side failure (model retired/404, safety block, empty
-      // response...) must not dead-end the public demo: log enough to diagnose
-      // and serve the same system fallback used for rate limits.
-      console.error("roughEstimate Gemini call failed:", {
+      // Every provider failed. The public demo must not dead-end, so log enough
+      // to diagnose and serve the system fallback estimate instead of an error.
+      console.error("roughEstimate AI call failed:", {
         statusCode,
         errorCode: error?.errorCode,
-        modelName,
-        fallbackModelNames,
+        attempts: error?.attempts,
         message: error?.message,
       });
-      // 402 = prepaid credits depleted, 401/403 = invalid/blocked key: needs a
-      // human, so tag it distinctly for log alerts.
+      // 402 = credits depleted, 401/403 = invalid/blocked key: needs a human,
+      // so tag it distinctly for log alerts.
       return respondWithRoughEstimateFallback(
-        [401, 402, 403].includes(statusCode) ? "ai_billing_or_auth" : "ai_error",
+        [401, 402, 403].includes(statusCode)
+          ? "ai_billing_or_auth"
+          : isGeminiRetryableStatus(statusCode)
+            ? "ai_unavailable"
+            : "ai_error",
       );
     }
 
@@ -2532,7 +2516,7 @@ ${normalizedDescription || "(see attached images)"}
       success: false,
       message: "Failed to generate rough estimate",
       errorCode: "AI_INTERNAL_ERROR",
-      apiKeyPresent: hasGeminiApiKey(),
+      apiKeyPresent: hasAiApiKey(),
     });
   }
 }
@@ -2610,7 +2594,8 @@ Rules:
 - Total effort should be realistic for the full scope described.
 `.trim();
 
-    const text = await generateGeminiJsonText(geminiClient, [{ text: prompt }], {
+    const text = await generateAiJsonText([{ text: prompt }], {
+      purpose: "refineRough",
       modelName,
       temperature: 0.15,
     });
@@ -2635,7 +2620,7 @@ Rules:
       success: false,
       message: "Failed to refine estimate",
       errorCode: "AI_INTERNAL_ERROR",
-      apiKeyPresent: hasGeminiApiKey(),
+      apiKeyPresent: hasAiApiKey(),
     });
   }
 }

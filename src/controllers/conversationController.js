@@ -1,12 +1,11 @@
 import {
   extractGeminiRetryAfterSeconds,
   extractGeminiStatusCode,
-  generateGeminiJsonText,
-  getGeminiClient,
   getGeminiModelName,
   isGeminiTemporaryStatus as isGeminiRetryableStatus,
   normalizeJsonResponse,
 } from "../lib/gemini.js";
+import { generateAiJsonText, hasAiApiKey } from "../lib/llm.js";
 import { buildParseConversationPrompt } from "../prompts/parseConversationPrompt.js";
 
 const VALID_RAW_INPUT_TYPES = new Set(["conversation", "email", "meeting_notes", "short_brief", "mixed"]);
@@ -100,9 +99,9 @@ export async function parseConversationCore({ rawInput }) {
     throw Object.assign(new Error("rawInput is required"), { statusCode: 400 });
   }
 
-  const geminiClient = getGeminiClient();
-  if (!geminiClient) {
-    throw Object.assign(new Error("GOOGLE_GENERATIVE_AI_API_KEY is not configured"), {
+  const aiAvailable = hasAiApiKey();
+  if (!aiAvailable) {
+    throw Object.assign(new Error("No AI provider is configured (set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY)"), {
       statusCode: 500,
     });
   }
@@ -110,7 +109,8 @@ export async function parseConversationCore({ rawInput }) {
   const modelName = getGeminiModelName("analyze");
   const prompt = buildParseConversationPrompt({ rawInput: normalizedInput });
 
-  const text = await generateGeminiJsonText(geminiClient, [{ text: prompt }], {
+  const text = await generateAiJsonText([{ text: prompt }], {
+    purpose: "analyze",
     modelName,
     temperature: 0.1,
   });

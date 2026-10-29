@@ -2,12 +2,11 @@ import prisma from "../lib/prisma.js";
 import {
   extractGeminiRetryAfterSeconds,
   extractGeminiStatusCode,
-  generateGeminiJsonText,
-  getGeminiClient,
   getGeminiModelName,
   isGeminiTemporaryStatus as isGeminiRetryableStatus,
   normalizeJsonResponse,
 } from "../lib/gemini.js";
+import { generateAiJsonText, hasAiApiKey } from "../lib/llm.js";
 import { buildEstimateModulesPrompt } from "../prompts/estimateModulesPrompt.js";
 import {
   getEstimationBaselines,
@@ -206,9 +205,9 @@ export async function estimateModulesCore({
     throw Object.assign(new Error("Workspace not found"), { statusCode: 401 });
   }
 
-  const geminiClient = getGeminiClient();
-  if (!geminiClient) {
-    throw Object.assign(new Error("GOOGLE_GENERATIVE_AI_API_KEY is not configured"), {
+  const aiAvailable = hasAiApiKey();
+  if (!aiAvailable) {
+    throw Object.assign(new Error("No AI provider is configured (set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY)"), {
       statusCode: 500,
     });
   }
@@ -231,7 +230,8 @@ export async function estimateModulesCore({
   const prompt = buildEstimateModulesPrompt({ requirementSpec, baselines });
 
   // Single Gemini call. Errors propagate with status info for the caller to translate.
-  const text = await generateGeminiJsonText(geminiClient, [{ text: prompt }], {
+  const text = await generateAiJsonText([{ text: prompt }], {
+    purpose: "analyze",
     modelName,
     temperature: 0.1,
   });

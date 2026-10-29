@@ -2,11 +2,9 @@ import prisma from "../lib/prisma.js";
 import {
   extractGeminiRetryAfterSeconds,
   extractGeminiStatusCode,
-  generateGeminiText,
-  getGeminiClient,
   getGeminiModelName,
-  hasGeminiApiKey,
 } from "../lib/gemini.js";
+import { generateAiText, hasAiApiKey } from "../lib/llm.js";
 
 const ANALYTICS_INSIGHT_QUEUE_WAIT_MS = 8_000;
 
@@ -342,12 +340,12 @@ ${dataSummary}
 請直接輸出洞察文本，不需要標題或其他格式。
 `;
 
-    const geminiClient = getGeminiClient();
-    if (!geminiClient) {
+    const aiAvailable = hasAiApiKey();
+    if (!aiAvailable) {
       return res.status(500).json({
         success: false,
-        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured",
-        apiKeyPresent: hasGeminiApiKey(),
+        message: "No AI provider is configured (set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY)",
+        apiKeyPresent: hasAiApiKey(),
       });
     }
 
@@ -355,7 +353,8 @@ ${dataSummary}
     let text;
 
     try {
-      text = await generateGeminiText(geminiClient, prompt, {
+      text = await generateAiText(prompt, {
+        purpose: "analyticsInsight",
         modelName,
         maxQueueWaitMs: ANALYTICS_INSIGHT_QUEUE_WAIT_MS,
       });
