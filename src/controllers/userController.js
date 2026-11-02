@@ -8,58 +8,14 @@ function excludePassword(user) {
 }
 
 /**
- * Get all users
- * GET /api/users
+ * A user may only read, change or delete their own record.
+ * Returns true when the request was rejected.
  */
-export async function getUsers(req, res) {
-  try {
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-    });
+function rejectIfNotSelf(req, res) {
+  if (req.params.id === req.user?.userId) return false;
 
-    return res.json(users.map(excludePassword));
-  } catch (error) {
-    console.error("Get users error:", error);
-    return res.status(500).json({ message: "Failed to fetch users" });
-  }
-}
-
-/**
- * Create a new user
- * POST /api/users
- */
-export async function createUser(req, res) {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required" });
-    }
-
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-      },
-    });
-
-    return res.status(201).json(excludePassword(user));
-  } catch (error) {
-    console.error("Create user error:", error);
-    return res.status(500).json({ message: "Failed to create user" });
-  }
+  res.status(403).json({ message: "Forbidden" });
+  return true;
 }
 
 /**
@@ -67,6 +23,8 @@ export async function createUser(req, res) {
  * GET /api/users/:id
  */
 export async function getUserById(req, res) {
+  if (rejectIfNotSelf(req, res)) return;
+
   try {
     const { id } = req.params;
     const user = await prisma.user.findUnique({
@@ -89,6 +47,8 @@ export async function getUserById(req, res) {
  * PUT /api/users/:id
  */
 export async function updateUser(req, res) {
+  if (rejectIfNotSelf(req, res)) return;
+
   try {
     const { id } = req.params;
     const { email, password } = req.body;
@@ -116,13 +76,10 @@ export async function updateUser(req, res) {
  * DELETE /api/users/:id
  */
 export async function deleteUser(req, res) {
+  if (rejectIfNotSelf(req, res)) return;
+
   try {
     const { id } = req.params;
-
-    // Prevent deleting self? Maybe.
-    if (req.user.userId === id) {
-      // Optional safeguard
-    }
 
     await prisma.user.delete({
       where: { id },
@@ -136,79 +93,14 @@ export async function deleteUser(req, res) {
 }
 
 /**
- * Verify phone number and grant free credits
+ * Phone verification is disabled: there is no OTP channel yet, and granting
+ * credits for an unverified phone number let anyone mint free credits.
  * POST /api/users/verify-phone
  */
 export async function verifyPhone(req, res) {
-  try {
-    const userId = req.user.userId;
-    const workspaceId = req.workspace?.id;
-    const { phoneNumber } = req.body;
-
-    if (!phoneNumber) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Phone number is required" });
-    }
-
-    if (!workspaceId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Workspace not found" });
-    }
-
-    // Check if phone number is already verified by someone else
-    const existingUser = await prisma.user.findUnique({
-      where: { phoneNumber },
-    });
-
-    if (existingUser && existingUser.id !== userId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Phone number already registered" });
-    }
-
-    // Verify the user doesn't already have a phone number verified
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (currentUser.phoneNumber) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "You have already verified a phone number",
-        });
-    }
-
-    // In a real app, verify OTP code here...
-    // ...
-
-    // Update user and grant 500 free credits to their workspace
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: { phoneNumber },
-      }),
-      prisma.workspace.update({
-        where: { id: workspaceId },
-        data: {
-          creditBalance: {
-            increment: 500,
-          },
-        },
-      }),
-    ]);
-
-    return res.json({
-      success: true,
-      message: "Phone verified, 500 credits granted!",
-    });
-  } catch (error) {
-    console.error("Verify phone error:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to verify phone" });
-  }
+  return res.status(503).json({
+    success: false,
+    message: "Phone verification is temporarily unavailable",
+    errorCode: "PHONE_VERIFICATION_UNAVAILABLE",
+  });
 }

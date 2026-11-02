@@ -1,7 +1,5 @@
 import { Router } from "express";
 import {
-  getUsers,
-  createUser,
   getUserById,
   updateUser,
   deleteUser,
@@ -14,8 +12,8 @@ const router = Router();
 // Protect all user routes
 router.use(authMiddleware);
 
-router.get("/", getUsers);
-router.post("/", createUser);
+// There is deliberately no user listing or creation endpoint: users are created
+// by the sign-in flow, and no client may enumerate other users.
 router.post("/verify-phone", verifyPhone); // Must be before /:id routes
 router.get("/:id", getUserById);
 router.put("/:id", updateUser);

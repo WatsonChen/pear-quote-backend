@@ -84,7 +84,7 @@ export async function handleLogin(req, res) {
  * POST /api/social-login
  */
 export async function handleSocialLogin(req, res) {
-  console.log("[Auth] handleSocialLogin called with body:", req.body);
+  console.log("[Auth] handleSocialLogin called");
   try {
     const { email } = req.body;
 
@@ -97,7 +97,7 @@ export async function handleSocialLogin(req, res) {
     }
 
     const result = await socialLogin(email);
-    console.log("[Auth] socialLogin success for:", email);
+    console.log("[Auth] socialLogin success");
 
     return res.json({
       success: true,

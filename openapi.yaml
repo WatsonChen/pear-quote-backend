@@ -254,9 +254,19 @@ paths:
   /social-login:
     post:
       summary: Login with Social Account (Google, GitHub, etc.)
-      description: Get backend JWT token using verified email from social provider
+      description: |
+        Server-to-server only. Issues a backend JWT for an email that the Next.js server
+        has already verified with the OAuth provider. Callers must send the shared secret
+        in the `X-Internal-Auth` header (env `INTERNAL_AUTH_SECRET`); browsers never call this.
+        Returns 401 without a valid secret and 503 in production when the secret is not configured.
       tags:
         - Auth
+      parameters:
+        - in: header
+          name: X-Internal-Auth
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -553,51 +563,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/Settings"
 
-  /users:
-    get:
-      summary: List users
-      tags: [Users]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: List of users
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/User"
-    post:
-      summary: Create user
-      tags: [Users]
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - password
-              properties:
-                email:
-                  type: string
-                password:
-                  type: string
-      responses:
-        "201":
-          description: User created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
-
   /users/{id}:
     get:
-      summary: Get user by ID
+      summary: Get the authenticated user's own record (403 for any other id)
       tags: [Users]
       security:
         - bearerAuth: []
