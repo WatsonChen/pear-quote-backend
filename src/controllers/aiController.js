@@ -322,7 +322,7 @@ export function buildProposalSlides(proposalDraft, quoteItems = [], locale = "zh
       title: L("建議開發時程", "Suggested timeline"),
       subtitle: proposalDraft.timelineSummary,
       bullets: timeline
-        .map((item) => `${item.title}${item.duration ? `｜${item.duration}` : ""}${item.detail ? `：${item.detail}` : ""}`)
+        .map((item) => `${item.title}${item.duration ? `${L("｜", " | ")}${item.duration}` : ""}${item.detail ? `${L("：", ": ")}${item.detail}` : ""}`)
         .slice(0, 8),
     },
     {
@@ -331,7 +331,7 @@ export function buildProposalSlides(proposalDraft, quoteItems = [], locale = "zh
       subtitle: L("依階段付款，降低雙方風險，確保交付品質。", "Pay by stage to share risk and protect delivery quality."),
       data: proposalDraft.paymentMilestones,
       bullets: proposalDraft.paymentMilestones
-        .map((m) => `${m.stage}${m.percentage ? `（${m.percentage}%）` : ""}${m.trigger ? `：${m.trigger}` : ""}`)
+        .map((m) => `${m.stage}${m.percentage ? ` (${m.percentage}%)` : ""}${m.trigger ? `${L("：", ": ")}${m.trigger}` : ""}`)
         .slice(0, 8),
     },
     ...(proposalDraft.testingCategories?.length > 0 ? [{
@@ -339,14 +339,14 @@ export function buildProposalSlides(proposalDraft, quoteItems = [], locale = "zh
       title: L("測試規範總覽", "Testing overview"),
       subtitle: L("完整覆蓋各功能面向，確保上線品質。", "Every area is covered before launch."),
       data: proposalDraft.testingCategories,
-      bullets: proposalDraft.testingCategories.map((t) => `${t.name}${t.description ? `：${t.description}` : ""}`).slice(0, 12),
+      bullets: proposalDraft.testingCategories.map((t) => `${t.name}${t.description ? `${L("：", ": ")}${t.description}` : ""}`).slice(0, 12),
     }] : []),
     {
       type: "uat-flow",
       title: L("UAT 與驗收流程", "UAT and acceptance"),
       subtitle: L("清楚的驗收階段與各方責任，避免爭議。", "Clear acceptance stages and responsibilities avoid disputes."),
       data: proposalDraft.uatSteps,
-      bullets: proposalDraft.uatSteps.map((s) => `${s.title}${s.duration ? `｜${s.duration}` : ""}${s.responsible ? `（${s.responsible}）` : ""}`).slice(0, 10),
+      bullets: proposalDraft.uatSteps.map((s) => `${s.title}${s.duration ? `${L("｜", " | ")}${s.duration}` : ""}${s.responsible ? ` (${s.responsible})` : ""}`).slice(0, 10),
     },
     {
       type: "maintenance-plans",
@@ -360,7 +360,7 @@ export function buildProposalSlides(proposalDraft, quoteItems = [], locale = "zh
       title: L("專案風險與應對措施", "Risks and mitigations"),
       subtitle: L("提前辨識關鍵風險，降低專案執行中的不確定性。", "Spotting the key risks early reduces uncertainty."),
       data: proposalDraft.risks,
-      bullets: proposalDraft.risks.map((r) => `${r.risk}${r.mitigation ? `→ ${r.mitigation}` : ""}`).slice(0, 8),
+      bullets: proposalDraft.risks.map((r) => `${r.risk}${r.mitigation ? ` → ${r.mitigation}` : ""}`).slice(0, 8),
     }] : []),
     ...(proposalDraft.contractProtection?.length > 0 ? [{
       type: "contract-protection",
@@ -374,7 +374,7 @@ export function buildProposalSlides(proposalDraft, quoteItems = [], locale = "zh
       title: L("下一步", "Next steps"),
       subtitle: L("選定方案後的進行流程。", "What happens once you approve."),
       data: proposalDraft.nextSteps,
-      bullets: proposalDraft.nextSteps.map((s) => `${s.step}${s.timing ? `（${s.timing}）` : ""}${s.detail ? `：${s.detail}` : ""}`).slice(0, 8),
+      bullets: proposalDraft.nextSteps.map((s) => `${s.step}${s.timing ? ` (${s.timing})` : ""}${s.detail ? `${L("：", ": ")}${s.detail}` : ""}`).slice(0, 8),
     }] : []),
     {
       title: L("提案結論", "Conclusion"),
@@ -479,7 +479,7 @@ export function normalizeProposalDraft(parsedResult, normalizedRequirements, ite
     ].filter(Boolean).join("\n"),
     milestones: proposalDraft.timeline
       .map((item) =>
-        `${item.title}${item.duration ? ` — ${item.duration}` : ""}${item.detail ? `：${item.detail}` : ""}`,
+        `${item.title}${item.duration ? ` — ${item.duration}` : ""}${item.detail ? `${L("：", ": ")}${item.detail}` : ""}`,
       )
       .join("\n"),
     paymentTerms: [
