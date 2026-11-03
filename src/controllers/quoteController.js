@@ -1,3 +1,5 @@
+import { generateProposalContentForQuote } from "./aiController.js";
+import { hasAiApiKey } from "../lib/llm.js";
 import crypto from "node:crypto";
 import prisma from "../lib/prisma.js";
 import {
@@ -2030,14 +2032,37 @@ export async function generateQuote(req, res) {
 
     const shareToken = quote.shareToken || (await buildUniqueShareToken());
 
+    // Write the proposal with the AI before charging; if it cannot answer, the
+    // user keeps their credits and nothing changes.
+    let proposalContent = quote.proposalContent;
+    if (!proposalContent) {
+      if (hasAiApiKey()) {
+        try {
+          proposalContent = await generateProposalContentForQuote({
+            quote,
+            locale: req.body?.locale,
+          });
+        } catch (aiError) {
+          console.error("Proposal generation failed:", aiError?.message || aiError);
+          return res.status(503).json({
+            success: false,
+            message:
+              "Proposal generation is temporarily unavailable. You were not charged. Please try again.",
+            errorCode: "PROPOSAL_AI_UNAVAILABLE",
+          });
+        }
+      } else {
+        proposalContent = buildDefaultProposalContent(quote);
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const updatedQuote = await tx.quote.update({
         where: { id },
         data: {
           shareToken,
           proposalStatus: quote.proposalStatus || "draft",
-          proposalContent:
-            quote.proposalContent || buildDefaultProposalContent(quote),
+          proposalContent,
           generationType: "proposal",
           proposalTheme:
             quote.proposalTheme || {

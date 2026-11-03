@@ -18,6 +18,7 @@ import {
 } from "../lib/roughEstimateCache.js";
 import { buildRoughEstimatePrompt } from "../prompts/roughEstimatePrompt.js";
 import { buildAnalyzePrompt } from "../prompts/analyzePrompt.js";
+import { buildProposalPrompt } from "../prompts/proposalPrompt.js";
 import { BASELINE_DISPLAY_NAMES } from "../lib/estimationBaselines.js";
 
 const DEFAULT_AI_RETRY_AFTER_SECONDS = 20;
@@ -81,7 +82,8 @@ function normalizeProposalList(value, fallback = []) {
   return fallback;
 }
 
-function normalizeProposalModules(value, items = []) {
+function normalizeProposalModules(value, items = [], locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   const modules = Array.isArray(value) ? value : [];
   const normalized = modules
     .map((module, index) => {
@@ -99,7 +101,7 @@ function normalizeProposalModules(value, items = []) {
         id: normalizeProposalText(module.id, `M${index + 1}`),
         title: normalizeProposalText(
           module.title || module.name,
-          items[index]?.description || `核心模組 ${index + 1}`,
+          items[index]?.description || L(`核心模組 ${index + 1}`, `Core module ${index + 1}`),
         ),
         bullets: normalizeProposalList(
           module.bullets || module.features || module.points,
@@ -112,15 +114,20 @@ function normalizeProposalModules(value, items = []) {
 
   return items.slice(0, 8).map((item, index) => ({
     id: `M${index + 1}`,
-    title: item.description || `核心模組 ${index + 1}`,
+    title: item.description || L(`核心模組 ${index + 1}`, `Core module ${index + 1}`),
     bullets: [
-      item.suggestedRole ? `負責角色：${item.suggestedRole}` : "",
-      item.estimatedHours ? `預估投入：${item.estimatedHours} 小時` : "",
+      item.suggestedRole ? `${L("負責角色：", "Role: ")}${item.suggestedRole}` : "",
+      item.estimatedHours ? L(`預估投入：${item.estimatedHours} 小時`, `Estimated effort: ${item.estimatedHours} hours`) : "",
     ].filter(Boolean),
   }));
 }
 
-function normalizeProposalTimeline(value, expectedDays) {
+export function isEnglishLocale(locale) {
+  return String(locale || "").trim().toLowerCase().startsWith("en");
+}
+
+function normalizeProposalTimeline(value, expectedDays, locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   const timeline = Array.isArray(value) ? value : [];
   const normalized = timeline
     .map((item, index) => {
@@ -129,7 +136,7 @@ function normalizeProposalTimeline(value, expectedDays) {
       }
       if (!item || typeof item !== "object") return null;
       return {
-        title: normalizeProposalText(item.title || item.phase, `階段 ${index + 1}`),
+        title: normalizeProposalText(item.title || item.phase, L(`階段 ${index + 1}`, `Phase ${index + 1}`)),
         duration: normalizeProposalText(item.duration || item.period),
         detail: normalizeProposalText(item.detail || item.description),
       };
@@ -139,21 +146,22 @@ function normalizeProposalTimeline(value, expectedDays) {
   if (normalized.length > 0) return normalized;
 
   return [
-    { title: "需求確認與系統規劃", duration: "2-4 週", detail: "確認範圍、角色、資料源、第三方 API 與驗收標準。" },
-    { title: "UI/UX 與核心功能建置", duration: "4-8 週", detail: "完成主要流程設計、前後台功能與資料模型。" },
-    { title: "整合測試與上線", duration: expectedDays ? `${expectedDays} 天內` : "依專案範圍確認", detail: "完成測試、修正、部署與教育訓練。" },
+    { title: L("需求確認與系統規劃", "Discovery and planning"), duration: L("2-4 週", "2-4 weeks"), detail: L("確認範圍、角色、資料源、第三方 API 與驗收標準。", "Confirm scope, roles, data sources, third-party APIs and acceptance criteria.") },
+    { title: L("UI/UX 與核心功能建置", "Design and core build"), duration: L("4-8 週", "4-8 weeks"), detail: L("完成主要流程設計、前後台功能與資料模型。", "Design the main flows and build the front end, back end and data model.") },
+    { title: L("整合測試與上線", "Testing and launch"), duration: expectedDays ? L(`${expectedDays} 天內`, `within ${expectedDays} days`) : L("依專案範圍確認", "to be confirmed with scope"), detail: L("完成測試、修正、部署與教育訓練。", "Complete testing, fixes, deployment and training.") },
   ];
 }
 
-function normalizePaymentMilestones(value) {
+function normalizePaymentMilestones(value, locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   if (!Array.isArray(value) || value.length === 0) {
     return [
-      { stage: "簽約訂金", percentage: 30, trigger: "合約簽署 + 開工" },
-      { stage: "UI/UX + 系統規劃確認", percentage: 20, trigger: "設計稿與架構文件 sign-off" },
-      { stage: "開發中期里程碑", percentage: 20, trigger: "三大核心模組完成 + demo" },
-      { stage: "UAT 啟動", percentage: 15, trigger: "測試環境 + 內測通過 + 業主收件" },
-      { stage: "驗收通過", percentage: 10, trigger: "雙方簽署驗收同意書" },
-      { stage: "保固期半程", percentage: 5, trigger: "上線後 3 個月無重大未解 bug" },
+      { stage: L("簽約訂金", "Deposit on signing"), percentage: 30, trigger: L("合約簽署 + 開工", "Contract signed and work starts") },
+      { stage: L("UI/UX + 系統規劃確認", "Design and plan sign-off"), percentage: 20, trigger: L("設計稿與架構文件 sign-off", "Designs and architecture approved") },
+      { stage: L("開發中期里程碑", "Mid-build milestone"), percentage: 20, trigger: L("三大核心模組完成 + demo", "Core modules complete with a demo") },
+      { stage: L("UAT 啟動", "UAT starts"), percentage: 15, trigger: L("測試環境 + 內測通過 + 業主收件", "Test environment ready and internal tests passed") },
+      { stage: L("驗收通過", "Acceptance"), percentage: 10, trigger: L("雙方簽署驗收同意書", "Both parties sign the acceptance form") },
+      { stage: L("保固期半程", "Mid-warranty"), percentage: 5, trigger: L("上線後 3 個月無重大未解 bug", "Three months after launch with no major open bugs") },
     ];
   }
   return value
@@ -165,7 +173,7 @@ function normalizePaymentMilestones(value) {
           : { stage: item.trim(), percentage: null, trigger: "" };
       }
       return {
-        stage: normalizeProposalText(item.stage || item.title || item.name, "付款階段"),
+        stage: normalizeProposalText(item.stage || item.title || item.name, L("付款階段", "Payment stage")),
         percentage: typeof item.percentage === "number" ? item.percentage : null,
         trigger: normalizeProposalText(item.trigger || item.condition || item.detail),
       };
@@ -173,37 +181,39 @@ function normalizePaymentMilestones(value) {
     .filter((m) => m.stage);
 }
 
-function normalizeTestingCategories(value) {
+function normalizeTestingCategories(value, locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   if (!Array.isArray(value) || value.length === 0) return [];
   return value
     .map((item) => {
       if (typeof item === "string") return { name: item.trim(), description: "" };
       return {
-        name: normalizeProposalText(item.name || item.title, "測試項目"),
+        name: normalizeProposalText(item.name || item.title, L("測試項目", "Test")),
         description: normalizeProposalText(item.description || item.detail),
       };
     })
     .filter((t) => t.name);
 }
 
-function normalizeUatSteps(value) {
+function normalizeUatSteps(value, locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   if (!Array.isArray(value) || value.length === 0) {
     return [
-      { title: "我方內測", duration: "5–7 天", responsible: "我方" },
-      { title: "提供測試環境", duration: "3 工作天簽收", responsible: "雙方" },
-      { title: "業主 UAT 第 1 回合", duration: "14 自然日", responsible: "業主" },
-      { title: "問題分類確認", duration: "5 工作天", responsible: "雙方" },
-      { title: "修正期", duration: "每 10 項 = 3 工作天", responsible: "我方" },
-      { title: "業主 UAT 第 2 回合", duration: "7 自然日", responsible: "業主" },
-      { title: "正式部署", duration: "1–2 天", responsible: "我方" },
-      { title: "文件與訓練", duration: "2–3 天", responsible: "雙方" },
+      { title: L("我方內測", "Internal testing"), duration: L("5–7 天", "5-7 days"), responsible: L("我方", "Us") },
+      { title: L("提供測試環境", "Provide a test environment"), duration: L("3 工作天簽收", "3 working days to sign off"), responsible: L("雙方", "Both") },
+      { title: L("業主 UAT 第 1 回合", "Client UAT round 1"), duration: L("14 自然日", "14 days"), responsible: L("業主", "Client") },
+      { title: L("問題分類確認", "Triage the findings"), duration: L("5 工作天", "5 working days"), responsible: L("雙方", "Both") },
+      { title: L("修正期", "Fix period"), duration: L("每 10 項 = 3 工作天", "3 working days per 10 items"), responsible: L("我方", "Us") },
+      { title: L("業主 UAT 第 2 回合", "Client UAT round 2"), duration: L("7 自然日", "7 days"), responsible: L("業主", "Client") },
+      { title: L("正式部署", "Production release"), duration: L("1–2 天", "1-2 days"), responsible: L("我方", "Us") },
+      { title: L("文件與訓練", "Documentation and training"), duration: L("2–3 天", "2-3 days"), responsible: L("雙方", "Both") },
     ];
   }
   return value
     .map((item) => {
       if (typeof item === "string") return { title: item.trim(), duration: "", responsible: "" };
       return {
-        title: normalizeProposalText(item.title || item.step || item.stage, "UAT 階段"),
+        title: normalizeProposalText(item.title || item.step || item.stage, L("UAT 階段", "UAT stage")),
         duration: normalizeProposalText(item.duration || item.period),
         responsible: normalizeProposalText(item.responsible || item.party),
       };
@@ -211,16 +221,17 @@ function normalizeUatSteps(value) {
     .filter((s) => s.title);
 }
 
-function normalizeMaintenanceTiers(value) {
+function normalizeMaintenanceTiers(value, locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   const defaults = [
-    { tier: "Basic", monthlyFee: "", hoursPool: "8 h / 月", regularSla: "5 工作天", criticalSla: "2 工作天" },
-    { tier: "Standard", monthlyFee: "", hoursPool: "16 h / 月", regularSla: "3 工作天", criticalSla: "1 工作天" },
-    { tier: "Premium", monthlyFee: "", hoursPool: "32 h / 月", regularSla: "1 工作天", criticalSla: "4 工時" },
+    { tier: "Basic", monthlyFee: "", hoursPool: L("8 h / 月", "8 h / month"), regularSla: L("5 工作天", "5 working days"), criticalSla: L("2 工作天", "2 working days") },
+    { tier: "Standard", monthlyFee: "", hoursPool: L("16 h / 月", "16 h / month"), regularSla: L("3 工作天", "3 working days"), criticalSla: L("1 工作天", "1 working day") },
+    { tier: "Premium", monthlyFee: "", hoursPool: L("32 h / 月", "32 h / month"), regularSla: L("1 工作天", "1 working day"), criticalSla: L("4 工時", "4 working hours") },
   ];
   if (!Array.isArray(value) || value.length === 0) return defaults;
   return value
     .map((item) => ({
-      tier: normalizeProposalText(item.tier || item.name, "方案"),
+      tier: normalizeProposalText(item.tier || item.name, L("方案", "Plan")),
       monthlyFee: normalizeProposalText(item.monthlyFee || item.price || item.fee),
       hoursPool: normalizeProposalText(item.hoursPool || item.hours),
       regularSla: normalizeProposalText(item.regularSla || item.sla),
@@ -229,13 +240,14 @@ function normalizeMaintenanceTiers(value) {
     .filter((t) => t.tier);
 }
 
-function normalizeNextSteps(value) {
+function normalizeNextSteps(value, locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   if (!Array.isArray(value) || value.length === 0) return [];
   return value
     .map((item) => {
       if (typeof item === "string") return { step: item.trim(), detail: "", timing: "" };
       return {
-        step: normalizeProposalText(item.step || item.title || item.name, "行動步驟"),
+        step: normalizeProposalText(item.step || item.title || item.name, L("行動步驟", "Action")),
         detail: normalizeProposalText(item.detail || item.description),
         timing: normalizeProposalText(item.timing || item.duration || item.when),
       };
@@ -256,7 +268,8 @@ function normalizeRisks(value) {
     .filter((r) => r.risk);
 }
 
-function buildProposalSlides(proposalDraft, quoteItems = []) {
+export function buildProposalSlides(proposalDraft, quoteItems = [], locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   const modules = proposalDraft.modules || [];
   const timeline = proposalDraft.timeline || [];
   const slides = [
@@ -270,7 +283,7 @@ function buildProposalSlides(proposalDraft, quoteItems = []) {
       ].filter(Boolean),
     },
     {
-      title: "專案摘要",
+      title: L("專案摘要", "Project summary"),
       subtitle: proposalDraft.positioning,
       bullets: [
         ...(proposalDraft.executiveSummary ? [proposalDraft.executiveSummary] : []),
@@ -278,18 +291,18 @@ function buildProposalSlides(proposalDraft, quoteItems = []) {
       ],
     },
     {
-      title: "為什麼要聚焦第一階段？",
-      subtitle: "先完成可商用的核心流程，再逐步擴充高風險能力。",
+      title: L("為什麼要聚焦第一階段？", "Why focus on phase one?"),
+      subtitle: L("先完成可商用的核心流程，再逐步擴充高風險能力。", "Ship a commercially usable core first, then add the higher-risk capabilities."),
       bullets: normalizeProposalList(proposalDraft.painPoints).slice(0, 6),
     },
     {
-      title: "第一階段核心使用流程",
-      subtitle: "從需求輸入到交付管理的一條龍流程。",
+      title: L("第一階段核心使用流程", "Phase-one core workflow"),
+      subtitle: L("從需求輸入到交付管理的一條龍流程。", "One continuous flow from intake to delivery."),
       bullets: normalizeProposalList(proposalDraft.coreWorkflow).slice(0, 8),
     },
     {
-      title: "第一階段交付範圍",
-      subtitle: "建議納入的核心模組。",
+      title: L("第一階段交付範圍", "Phase-one scope"),
+      subtitle: L("建議納入的核心模組。", "The core modules we recommend including."),
       bullets: modules.map((module) => `${module.id}. ${module.title}`).slice(0, 10),
     },
     ...modules.slice(0, 3).map((module) => ({
@@ -298,15 +311,15 @@ function buildProposalSlides(proposalDraft, quoteItems = []) {
       bullets: module.bullets?.length ? module.bullets : quoteItems.slice(0, 4).map((item) => item.description),
     })),
     {
-      title: "不包含與後續擴充方向",
-      subtitle: "清楚切分第一階段邊界，避免範圍失焦。",
+      title: L("不包含與後續擴充方向", "Not included, and what comes next"),
+      subtitle: L("清楚切分第一階段邊界，避免範圍失焦。", "A clear boundary for phase one keeps the scope focused."),
       bullets: [
-        ...normalizeProposalList(proposalDraft.excludedScope).map((item) => `不包含：${item}`),
-        ...normalizeProposalList(proposalDraft.futureExpansion).map((item) => `後續：${item}`),
+        ...normalizeProposalList(proposalDraft.excludedScope).map((item) => `${L("不包含：", "Not included: ")}${item}`),
+        ...normalizeProposalList(proposalDraft.futureExpansion).map((item) => `${L("後續：", "Later: ")}${item}`),
       ].slice(0, 10),
     },
     {
-      title: "建議開發時程",
+      title: L("建議開發時程", "Suggested timeline"),
       subtitle: proposalDraft.timelineSummary,
       bullets: timeline
         .map((item) => `${item.title}${item.duration ? `｜${item.duration}` : ""}${item.detail ? `：${item.detail}` : ""}`)
@@ -314,8 +327,8 @@ function buildProposalSlides(proposalDraft, quoteItems = []) {
     },
     {
       type: "payment-milestones",
-      title: "付款里程碑",
-      subtitle: "依階段付款，降低雙方風險，確保交付品質。",
+      title: L("付款里程碑", "Payment milestones"),
+      subtitle: L("依階段付款，降低雙方風險，確保交付品質。", "Pay by stage to share risk and protect delivery quality."),
       data: proposalDraft.paymentMilestones,
       bullets: proposalDraft.paymentMilestones
         .map((m) => `${m.stage}${m.percentage ? `（${m.percentage}%）` : ""}${m.trigger ? `：${m.trigger}` : ""}`)
@@ -323,53 +336,53 @@ function buildProposalSlides(proposalDraft, quoteItems = []) {
     },
     ...(proposalDraft.testingCategories?.length > 0 ? [{
       type: "testing-overview",
-      title: "測試規範總覽",
-      subtitle: "完整覆蓋各功能面向，確保上線品質。",
+      title: L("測試規範總覽", "Testing overview"),
+      subtitle: L("完整覆蓋各功能面向，確保上線品質。", "Every area is covered before launch."),
       data: proposalDraft.testingCategories,
       bullets: proposalDraft.testingCategories.map((t) => `${t.name}${t.description ? `：${t.description}` : ""}`).slice(0, 12),
     }] : []),
     {
       type: "uat-flow",
-      title: "UAT 與驗收流程",
-      subtitle: "清楚的驗收階段與各方責任，避免爭議。",
+      title: L("UAT 與驗收流程", "UAT and acceptance"),
+      subtitle: L("清楚的驗收階段與各方責任，避免爭議。", "Clear acceptance stages and responsibilities avoid disputes."),
       data: proposalDraft.uatSteps,
       bullets: proposalDraft.uatSteps.map((s) => `${s.title}${s.duration ? `｜${s.duration}` : ""}${s.responsible ? `（${s.responsible}）` : ""}`).slice(0, 10),
     },
     {
       type: "maintenance-plans",
-      title: "後續維護方案",
-      subtitle: "上線後 6 個月免費保固，之後三方案擇一。",
+      title: L("後續維護方案", "Ongoing support"),
+      subtitle: L("上線後 6 個月免費保固，之後三方案擇一。", "Six months of free warranty after launch, then one of three plans."),
       data: proposalDraft.maintenanceTiers,
-      bullets: proposalDraft.maintenanceTiers.map((t) => `${t.tier}${t.monthlyFee ? `：${t.monthlyFee} / 月` : ""}${t.hoursPool ? `，工時池 ${t.hoursPool}` : ""}`),
+      bullets: proposalDraft.maintenanceTiers.map((t) => `${t.tier}${t.monthlyFee ? `${L("：", ": ")}${t.monthlyFee}${L(" / 月", " / month")}` : ""}${t.hoursPool ? `${L("，工時池 ", ", hours pool ")}${t.hoursPool}` : ""}`),
     },
     ...(proposalDraft.risks?.length > 0 ? [{
       type: "risk-overview",
-      title: "專案風險與應對措施",
-      subtitle: "提前辨識關鍵風險，降低專案執行中的不確定性。",
+      title: L("專案風險與應對措施", "Risks and mitigations"),
+      subtitle: L("提前辨識關鍵風險，降低專案執行中的不確定性。", "Spotting the key risks early reduces uncertainty."),
       data: proposalDraft.risks,
       bullets: proposalDraft.risks.map((r) => `${r.risk}${r.mitigation ? `→ ${r.mitigation}` : ""}`).slice(0, 8),
     }] : []),
     ...(proposalDraft.contractProtection?.length > 0 ? [{
       type: "contract-protection",
-      title: "合約保護重點",
-      subtitle: "明確範圍認定與驗收機制，保障雙方權益。",
+      title: L("合約保護重點", "Contract protections"),
+      subtitle: L("明確範圍認定與驗收機制，保障雙方權益。", "Clear scope and acceptance rules protect both sides."),
       data: proposalDraft.contractProtection,
       bullets: proposalDraft.contractProtection.slice(0, 12),
     }] : []),
     ...(proposalDraft.nextSteps?.length > 0 ? [{
       type: "next-steps",
-      title: "下一步",
-      subtitle: "選定方案後的進行流程。",
+      title: L("下一步", "Next steps"),
+      subtitle: L("選定方案後的進行流程。", "What happens once you approve."),
       data: proposalDraft.nextSteps,
       bullets: proposalDraft.nextSteps.map((s) => `${s.step}${s.timing ? `（${s.timing}）` : ""}${s.detail ? `：${s.detail}` : ""}`).slice(0, 8),
     }] : []),
     {
-      title: "提案結論",
+      title: L("提案結論", "Conclusion"),
       subtitle: proposalDraft.conclusion,
       bullets: normalizeProposalList(proposalDraft.keyTakeaways, [
-        "可商用核心版本",
-        "第三方 API 整合",
-        "後續模組擴充",
+        L("可商用核心版本", "A commercially usable core"),
+        L("第三方 API 整合", "Third-party integrations"),
+        L("後續模組擴充", "Room for later modules"),
       ]).slice(0, 5),
     },
   ];
@@ -377,23 +390,24 @@ function buildProposalSlides(proposalDraft, quoteItems = []) {
   return slides.filter((slide) => slide.title || slide.bullets?.length);
 }
 
-function normalizeProposalDraft(parsedResult, normalizedRequirements, items) {
+export function normalizeProposalDraft(parsedResult, normalizedRequirements, items, locale = "zh-TW") {
+  const L = (zh, en) => (isEnglishLocale(locale) ? en : zh);
   const source = parsedResult?.proposalDraft || parsedResult?.proposal || {};
   const totalAmount = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const expectedDays = parsedResult?.expectedDays || null;
   const coverTitle = normalizeProposalText(
     source.coverTitle || source.projectTitle,
-    parsedResult?.summary || "AI 專案建置提案",
+    parsedResult?.summary || L("AI 專案建置提案", "Project proposal"),
   );
-  const modules = normalizeProposalModules(source.modules, items);
-  const timeline = normalizeProposalTimeline(source.timeline, expectedDays);
+  const modules = normalizeProposalModules(source.modules, items, locale);
+  const timeline = normalizeProposalTimeline(source.timeline, expectedDays, locale);
 
   const proposalDraft = {
     type: "full_proposal",
     coverTitle,
     subtitle: normalizeProposalText(
       source.subtitle,
-      "依據輸入素材整理出的第一階段建置提案。",
+      L("依據輸入素材整理出的第一階段建置提案。", "A phase-one delivery plan based on your brief."),
     ),
     executiveSummary: normalizeProposalText(
       source.executiveSummary || source.summary,
@@ -401,54 +415,54 @@ function normalizeProposalDraft(parsedResult, normalizedRequirements, items) {
     ),
     positioning: normalizeProposalText(
       source.positioning,
-      "第一階段聚焦可商用的核心流程，進階自動化與高風險能力列入後續擴充。",
+      L("第一階段聚焦可商用的核心流程，進階自動化與高風險能力列入後續擴充。", "Phase one focuses on a dependable, commercially usable core; advanced automation and higher-risk capabilities come later."),
     ),
     priceSummary: totalAmount > 0
-      ? `建議報價：NT$ ${Math.round(totalAmount).toLocaleString("en-US")} 未稅`
+      ? L(`建議報價：NT$ ${Math.round(totalAmount).toLocaleString("en-US")} 未稅`, `Suggested price: NT$ ${Math.round(totalAmount).toLocaleString("en-US")} before tax`)
       : normalizeProposalText(source.priceSummary, ""),
     timelineSummary: normalizeProposalText(
       source.timelineSummary,
-      expectedDays ? `預估開發期程：${expectedDays} 天` : "預估期程依最終範圍確認",
+      expectedDays ? L(`預估開發期程：${expectedDays} 天`, `Estimated timeline: ${expectedDays} days`) : L("預估期程依最終範圍確認", "Timeline to be confirmed with final scope"),
     ),
     feeBoundary: normalizeProposalText(
       source.feeBoundary,
-      "第三方 AI、社群 API、雲端與用量費另計。",
+      L("第三方 AI、社群 API、雲端與用量費另計。", "Third-party AI, social APIs, cloud and usage fees are billed separately."),
     ),
     businessModel: normalizeProposalList(source.businessModel),
     painPoints: normalizeProposalList(source.painPoints, [
-      "需求與內容資訊分散，難以快速整理成可執行範圍。",
-      "人工整理提案與估價耗時，且不同專案品質不一致。",
-      "第三方服務與平台政策存在變動，需要先切清楚第一階段邊界。",
+      L("需求與內容資訊分散，難以快速整理成可執行範圍。", "Requirements are scattered and hard to turn into a deliverable scope."),
+      L("人工整理提案與估價耗時，且不同專案品質不一致。", "Preparing proposals and estimates by hand is slow and uneven."),
+      L("第三方服務與平台政策存在變動，需要先切清楚第一階段邊界。", "Third-party services and platform rules change, so phase one needs a clear boundary."),
     ]),
     coreWorkflow: normalizeProposalList(source.coreWorkflow, [
-      "建立客戶與專案資料",
-      "上傳需求素材或輸入 Prompt",
-      "AI 解析需求並生成報價項目",
-      "確認報價、時程與付款條件",
-      "生成提案頁並追蹤客戶互動",
+      L("釐清需求與成功標準", "Clarify requirements and success criteria"),
+      L("確認範圍、時程與付款條件", "Agree scope, timeline and payment terms"),
+      L("設計與開發核心功能", "Design and build the core features"),
+      L("測試與客戶驗收", "Test and obtain client acceptance"),
+      L("上線與交接", "Launch and hand over"),
     ]),
     modules,
     includedScope: normalizeProposalList(source.includedScope, modules.map((module) => module.title)),
     excludedScope: normalizeProposalList(source.excludedScope, [
-      "未列於本提案的第三方平台費用",
-      "提案確認後新增或變更的工作範圍",
-      "未另行約定的長期維護與營運服務",
+      L("未列於本提案的第三方平台費用", "Third-party platform fees not listed in this proposal"),
+      L("提案確認後新增或變更的工作範圍", "Scope added or changed after approval"),
+      L("未另行約定的長期維護與營運服務", "Ongoing maintenance and operations unless agreed separately"),
     ]),
     futureExpansion: normalizeProposalList(source.futureExpansion),
     technicalStrategy: normalizeProposalList(source.technicalStrategy),
     timeline,
     pricingStrategy: normalizeProposalList(source.pricingStrategy),
-    paymentMilestones: normalizePaymentMilestones(source.paymentMilestones),
+    paymentMilestones: normalizePaymentMilestones(source.paymentMilestones, locale),
     ongoingFees: normalizeProposalList(source.ongoingFees),
-    testingCategories: normalizeTestingCategories(source.testingCategories),
-    uatSteps: normalizeUatSteps(source.uatSteps),
-    maintenanceTiers: normalizeMaintenanceTiers(source.maintenanceTiers),
+    testingCategories: normalizeTestingCategories(source.testingCategories, locale),
+    uatSteps: normalizeUatSteps(source.uatSteps, locale),
+    maintenanceTiers: normalizeMaintenanceTiers(source.maintenanceTiers, locale),
     contractProtection: normalizeProposalList(source.contractProtection),
     risks: normalizeRisks(source.risks),
-    nextSteps: normalizeNextSteps(source.nextSteps),
+    nextSteps: normalizeNextSteps(source.nextSteps, locale),
     conclusion: normalizeProposalText(
       source.conclusion,
-      "建議先以第一階段完成可商用核心版本，保留後續擴充空間並降低初期開發風險。",
+      L("建議先以第一階段完成可商用核心版本，保留後續擴充空間並降低初期開發風險。", "We recommend delivering a commercially usable core in phase one, keeping room to expand and lowering early delivery risk."),
     ),
     keyTakeaways: normalizeProposalList(source.keyTakeaways),
   };
@@ -472,13 +486,43 @@ function normalizeProposalDraft(parsedResult, normalizedRequirements, items) {
       ...proposalDraft.paymentMilestones.map((m) =>
         `${m.stage}${m.percentage != null ? `（${m.percentage}%）` : ""}${m.trigger ? `：${m.trigger}` : ""}`
       ),
-      ...proposalDraft.ongoingFees.map((item) => `後續費用：${item}`),
+      ...proposalDraft.ongoingFees.map((item) => `${L("後續費用：", "Ongoing fees: ")}${item}`),
       proposalDraft.feeBoundary,
     ].filter(Boolean).join("\n"),
     nextSteps: proposalDraft.conclusion,
-    ctaText: "接受此提案",
-    slides: buildProposalSlides(proposalDraft, items),
+    ctaText: L("接受此提案", "Accept this proposal"),
+    slides: buildProposalSlides(proposalDraft, items, locale),
   };
+}
+
+/**
+ * Writes the full proposal for an existing quote with the AI chain. Throws when
+ * no provider can answer, so the caller can refuse without charging.
+ */
+export async function generateProposalContentForQuote({ quote, locale = "zh-TW" }) {
+  const items = (quote.items || []).map((item) => ({
+    description: item.description,
+    suggestedRole: item.suggestedRole,
+    estimatedHours: item.estimatedHours,
+    amount: Number(item.amount || 0),
+  }));
+  const prompt = buildProposalPrompt({ quote, items, locale });
+  const text = await generateAiJsonText([{ text: prompt }], {
+    purpose: "analyze",
+    modelName: getGeminiModelName("analyze"),
+    fallbackModelNames: buildAnalyzeFallbackModelNames(),
+    maxQueueWaitMs: TRANSLATE_QUEUE_WAIT_MS,
+    // A full proposal is a long answer; the default 30s client timeout is too tight.
+    timeoutMs: 90_000,
+    maxTokens: 10_000,
+  });
+  const parsed = parseAiJsonPayload(text, "proposal response");
+  return normalizeProposalDraft(
+    { ...parsed, expectedDays: quote.expectedDays, summary: quote.description },
+    quote.description || "",
+    items,
+    locale,
+  );
 }
 
 function readPositiveIntEnv(name, fallback) {

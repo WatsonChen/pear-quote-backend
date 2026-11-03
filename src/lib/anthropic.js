@@ -130,7 +130,7 @@ export async function generateAnthropicText(parts, options = {}) {
     max_tokens: maxTokens,
     output_config: { effort: EFFORT_BY_PURPOSE[purpose] ?? DEFAULT_EFFORT },
     messages: [{ role: "user", content: toAnthropicContent(parts) }],
-  });
+  }, options.timeoutMs ? { timeout: options.timeoutMs } : undefined);
 
   if (response.stop_reason === "refusal") {
     throw new AnthropicResponseError(
