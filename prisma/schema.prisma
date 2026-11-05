@@ -257,6 +257,8 @@ model SystemSettings {
   materials                    Json?
   quoteValidityDays            Int?      @default(30)
   estimationBaselines          Json?
+  proposalAbout                String?
+  proposalProof                String?
   workspaceId                  String    @unique
   workspace                    Workspace @relation(fields: [workspaceId], references: [id])
 }

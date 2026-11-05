@@ -50,6 +50,13 @@ export async function getSettings(req, res) {
   }
 }
 
+/** undefined leaves the field alone; an empty string clears it. */
+function cleanProfileText(value, max) {
+  if (value === undefined) return undefined;
+  const text = String(value ?? "").trim().slice(0, max);
+  return text || null;
+}
+
 /**
  * Update system settings
  * PUT /api/settings
@@ -73,6 +80,8 @@ export async function updateSettings(req, res) {
       materials, // Dynamic materials
       quoteValidityDays,
       bookingUrl,
+      proposalAbout,
+      proposalProof,
     } = req.body;
 
     const settings = await prisma.systemSettings.upsert({
@@ -92,6 +101,8 @@ export async function updateSettings(req, res) {
           ? parseFloat(targetMarginMax)
           : undefined,
         companySealUrl,
+        proposalAbout: cleanProfileText(proposalAbout, 600),
+        proposalProof: cleanProfileText(proposalProof, 1400),
         roleRates: roleRates || undefined,
         projectTypes: projectTypes || undefined,
         materials: materials || undefined,
@@ -115,6 +126,8 @@ export async function updateSettings(req, res) {
           ? parseFloat(targetMarginMax)
           : undefined,
         companySealUrl,
+        proposalAbout: cleanProfileText(proposalAbout, 600),
+        proposalProof: cleanProfileText(proposalProof, 1400),
         roleRates: roleRates || undefined,
         projectTypes: projectTypes || undefined,
         materials: materials || undefined,

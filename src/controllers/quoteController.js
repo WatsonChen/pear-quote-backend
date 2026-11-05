@@ -1,3 +1,4 @@
+import { loadProposalContext } from "../lib/proposalContext.js";
 import { generateProposalContentForQuote } from "./aiController.js";
 import { hasAiApiKey } from "../lib/llm.js";
 import crypto from "node:crypto";
@@ -2038,9 +2039,11 @@ export async function generateQuote(req, res) {
     if (!proposalContent) {
       if (hasAiApiKey()) {
         try {
+          const context = await loadProposalContext({ workspaceId, quoteId: id });
           proposalContent = await generateProposalContentForQuote({
             quote,
             locale: req.body?.locale,
+            ...context,
           });
         } catch (aiError) {
           console.error("Proposal generation failed:", aiError?.message || aiError);

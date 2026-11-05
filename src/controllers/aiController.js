@@ -388,6 +388,16 @@ export function buildProposalSlides(proposalDraft, quoteItems = [], locale = "zh
     },
   ];
 
+  const about = proposalDraft.aboutUs;
+  if (about && (about.about || about.proof?.length)) {
+    slides.push({
+      type: "about-us",
+      title: L("關於我們", "About us"),
+      subtitle: about.name || undefined,
+      bullets: [about.about, ...(about.proof || [])].filter(Boolean),
+    });
+  }
+
   return slides.filter((slide) => slide.title || slide.bullets?.length);
 }
 
@@ -467,6 +477,10 @@ export function normalizeProposalDraft(parsedResult, normalizedRequirements, ite
     ),
     keyTakeaways: normalizeProposalList(source.keyTakeaways),
     options: normalizeProposalOptions(source.options, items),
+    // Straight from the user's own profile, never rewritten by the model.
+    aboutUs: parsedResult?.provider
+      ? { name: parsedResult.provider.name, about: parsedResult.provider.about, proof: parsedResult.provider.proof || [] }
+      : null,
   };
 
   return {
@@ -501,14 +515,19 @@ export function normalizeProposalDraft(parsedResult, normalizedRequirements, ite
  * Writes the full proposal for an existing quote with the AI chain. Throws when
  * no provider can answer, so the caller can refuse without charging.
  */
-export async function generateProposalContentForQuote({ quote, locale = "zh-TW" }) {
+export async function generateProposalContentForQuote({
+  quote,
+  locale = "zh-TW",
+  provider = null,
+  requirementContext = null,
+}) {
   const items = (quote.items || []).map((item) => ({
     description: item.description,
     suggestedRole: item.suggestedRole,
     estimatedHours: item.estimatedHours,
     amount: Number(item.amount || 0),
   }));
-  const prompt = buildProposalPrompt({ quote, items, locale });
+  const prompt = buildProposalPrompt({ quote, items, locale, provider, requirementContext });
   const text = await generateAiJsonText([{ text: prompt }], {
     purpose: "analyze",
     modelName: getGeminiModelName("analyze"),
@@ -520,7 +539,7 @@ export async function generateProposalContentForQuote({ quote, locale = "zh-TW" 
   });
   const parsed = parseAiJsonPayload(text, "proposal response");
   return normalizeProposalDraft(
-    { ...parsed, expectedDays: quote.expectedDays, summary: quote.description },
+    { ...parsed, expectedDays: quote.expectedDays, summary: quote.description, provider },
     quote.description || "",
     items,
     locale,

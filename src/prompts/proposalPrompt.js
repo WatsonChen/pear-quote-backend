@@ -7,10 +7,12 @@
  * @param {object} params
  * @param {object} params.quote   - { customerName, projectName, description, projectType, expectedDays, validityDays, paymentTerms, totalAmount }
  * @param {Array}  params.items   - [{ description, suggestedRole, estimatedHours, amount }]
+ * @param {object|null} params.provider - { name, about, proof[] } written by the user, or null when not configured
+ * @param {string|null} params.requirementContext - structured reading of the client's request (JSON text)
  * @param {string} params.locale  - "en" for English, anything else for Traditional Chinese (Taiwan)
  * @returns {string}
  */
-export function buildProposalPrompt({ quote, items, locale }) {
+export function buildProposalPrompt({ quote, items, locale, provider = null, requirementContext = null }) {
   const english = String(locale || "").trim().toLowerCase().startsWith("en");
   const language = english
     ? "English"
@@ -35,6 +37,19 @@ export function buildProposalPrompt({ quote, items, locale }) {
     })),
   };
 
+  const providerBlock = provider
+    ? `
+PROVIDER (written by the user; the only company facts you may use)
+${JSON.stringify(provider, null, 2)}
+`
+    : "";
+  const requirementBlock = requirementContext
+    ? `
+CLIENT REQUEST ANALYSIS (what the client actually asked for; use it to make the proposal specific)
+${requirementContext}
+`
+    : "";
+
   return `
 You are a senior delivery lead writing a client-ready proposal for a software or digital-services project.
 The quote below is final. Your job is to write the proposal around it, so the client understands what they are buying, why it is scoped this way, and what happens next.
@@ -45,6 +60,7 @@ LANGUAGE: write every string value in ${language}.
 GROUNDING RULES
 - Use only facts in the quote JSON. Never invent client history, past results, team size, tools, statistics or guarantees.
 - Anything you have to assume (platform, integrations, content supplied by the client) goes into "assumptions" style wording inside excludedScope or risks, not stated as fact.
+- The provider block is the only source for statements about the delivery company. ${provider ? "Reflect its strengths where they genuinely fit this project (for example in positioning and risk mitigations), and never add experience, clients, results or team details that it does not state." : "No provider profile is configured: write nothing about the company's experience, past clients, team, certifications or track record. Write only from the quote."}
 - Do not change the total, the line items or the hours. Do not put per-item prices in the narrative; refer to the quote for numbers.
 - If paymentTermsOnQuote is given, paymentMilestones must follow it exactly (same percentages and triggers). Otherwise propose a fair schedule that sums to 100.
 - If expectedDays is given, the timeline phases must add up to roughly that duration. Otherwise give ranges.
@@ -65,7 +81,7 @@ QUALITY RULES
 
 QUOTE:
 ${JSON.stringify(source, null, 2)}
-
+${providerBlock}${requirementBlock}
 OUTPUT SCHEMA:
 {
   "proposalDraft": {
