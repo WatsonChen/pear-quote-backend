@@ -1,9 +1,11 @@
 import prisma from "../lib/prisma.js";
 import {
   sendProposalAcceptedNotification,
+  sendProposalCommentNotification,
   sendProposalViewedNotification,
 } from "../services/proposalNotificationService.js";
 import { serializePublicProposal, resolveOwnerUser } from "../lib/proposalSerializer.js";
+import { PROPOSAL_SECTIONS, isKnownOptionId } from "../lib/proposalOptions.js";
 
 const TERMINAL_PROPOSAL_STATUSES = new Set(["accepted", "rejected"]);
 
@@ -126,6 +128,7 @@ export async function acceptProposal(req, res) {
     const name = String(req.body?.name || "").trim();
     const email = String(req.body?.email || "").trim();
     const responseMessage = String(req.body?.message || "").trim();
+    const optionId = req.body?.optionId ? String(req.body.optionId) : null;
 
     if (!name || !email) {
       return res.status(400).json({
@@ -154,6 +157,12 @@ export async function acceptProposal(req, res) {
       });
     }
 
+    if (optionId && !isKnownOptionId(quote.proposalContent?.options, optionId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Unknown package option" });
+    }
+
     if (quote.proposalStatus === "rejected") {
       return res.status(409).json({
         success: false,
@@ -170,8 +179,13 @@ export async function acceptProposal(req, res) {
         clientResponseName: name,
         clientResponseEmail: email,
         clientResponseMessage: responseMessage || null,
+        clientSelectedOptionId: optionId,
         proposalStatus: "accepted",
       },
+    });
+
+    await prisma.proposalEvent.create({
+      data: { quoteId: quote.id, type: "accept" },
     });
 
     const ownerUser = resolveOwnerUser(quote.workspace);
@@ -181,6 +195,9 @@ export async function acceptProposal(req, res) {
       clientName: name,
       clientEmail: email,
       message: responseMessage,
+      optionName: optionId
+        ? quote.proposalContent.options.find((o) => o.id === optionId)?.name
+        : null,
     });
 
     return res.json({
@@ -191,6 +208,7 @@ export async function acceptProposal(req, res) {
       clientResponseName: updatedQuote.clientResponseName,
       clientResponseEmail: updatedQuote.clientResponseEmail,
       clientResponseMessage: updatedQuote.clientResponseMessage,
+      clientSelectedOptionId: updatedQuote.clientSelectedOptionId,
     });
   } catch (error) {
     console.error("Accept proposal error:", error);
@@ -198,5 +216,227 @@ export async function acceptProposal(req, res) {
       success: false,
       message: "Failed to accept proposal",
     });
+  }
+}
+
+const MAX_SECTION_MS = 10 * 60 * 1000;
+
+/**
+ * Record that a client spent time on a section.
+ * POST /api/proposals/:shareToken/events
+ */
+export async function trackProposalSection(req, res) {
+  try {
+    const { shareToken } = req.params;
+    const section = String(req.body?.section || "");
+    const durationMs = Math.round(Number(req.body?.durationMs));
+
+    if (!PROPOSAL_SECTIONS.includes(section) || !Number.isFinite(durationMs) || durationMs < 1) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid section event" });
+    }
+
+    const quote = await prisma.quote.findUnique({
+      where: { shareToken },
+      select: { id: true },
+    });
+    if (!quote) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Proposal not found" });
+    }
+
+    await prisma.proposalEvent.create({
+      data: {
+        quoteId: quote.id,
+        type: "section",
+        section,
+        durationMs: Math.min(durationMs, MAX_SECTION_MS),
+      },
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Track proposal section error:", error);
+    return res.status(500).json({ success: false, message: "Failed to track" });
+  }
+}
+
+function serializeComment(comment) {
+  return {
+    id: comment.id,
+    section: comment.section,
+    authorName: comment.authorName,
+    body: comment.body,
+    fromClient: comment.fromClient,
+    createdAt: comment.createdAt,
+  };
+}
+
+/**
+ * The thread on a shared proposal. The share link is the credential, so anyone
+ * holding it sees the thread; emails are never returned.
+ * GET /api/proposals/:shareToken/comments
+ */
+export async function listPublicComments(req, res) {
+  try {
+    const quote = await prisma.quote.findUnique({
+      where: { shareToken: req.params.shareToken },
+      select: { id: true },
+    });
+    if (!quote) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Proposal not found" });
+    }
+    const comments = await prisma.proposalComment.findMany({
+      where: { quoteId: quote.id },
+      orderBy: { createdAt: "asc" },
+      take: 200,
+    });
+    return res.json({ success: true, comments: comments.map(serializeComment) });
+  } catch (error) {
+    console.error("List public comments error:", error);
+    return res.status(500).json({ success: false, message: "Failed to load" });
+  }
+}
+
+/**
+ * A client asks a question.
+ * POST /api/proposals/:shareToken/comments
+ */
+export async function createPublicComment(req, res) {
+  try {
+    const name = String(req.body?.name || "").trim().slice(0, 80);
+    const email = String(req.body?.email || "").trim().slice(0, 160);
+    const body = String(req.body?.body || "").trim().slice(0, 2000);
+    const section = PROPOSAL_SECTIONS.includes(req.body?.section)
+      ? req.body.section
+      : null;
+
+    if (!name || !body) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Name and message are required" });
+    }
+
+    const quote = await findPublicProposal(req.params.shareToken);
+    if (!quote) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Proposal not found" });
+    }
+
+    const comment = await prisma.proposalComment.create({
+      data: {
+        quoteId: quote.id,
+        section,
+        authorName: name,
+        authorEmail: email || null,
+        body,
+        fromClient: true,
+      },
+    });
+    await prisma.proposalEvent.create({
+      data: { quoteId: quote.id, type: "comment", section },
+    });
+
+    const ownerUser = resolveOwnerUser(quote.workspace);
+    await sendProposalCommentNotification({
+      to: ownerUser?.email,
+      proposalName: quote.projectName,
+      clientName: name,
+      clientEmail: email,
+      message: body,
+    });
+
+    return res.status(201).json({ success: true, comment: serializeComment(comment) });
+  } catch (error) {
+    console.error("Create public comment error:", error);
+    return res.status(500).json({ success: false, message: "Failed to send" });
+  }
+}
+
+async function findOwnedQuote(req) {
+  const quote = await prisma.quote.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, workspaceId: true },
+  });
+  if (!quote) return { status: 404 };
+  if (quote.workspaceId !== req.workspace?.id) return { status: 403 };
+  return { quote };
+}
+
+/**
+ * Owner: how the client read the proposal, plus the question thread.
+ * GET /api/quotes/:id/proposal-activity
+ */
+export async function getProposalActivity(req, res) {
+  try {
+    const { quote, status } = await findOwnedQuote(req);
+    if (!quote) return res.status(status).json({ message: "Not found" });
+
+    const [grouped, comments, lastEvents] = await Promise.all([
+      prisma.proposalEvent.groupBy({
+        by: ["section"],
+        where: { quoteId: quote.id, type: "section" },
+        _sum: { durationMs: true },
+        _count: { _all: true },
+      }),
+      prisma.proposalComment.findMany({
+        where: { quoteId: quote.id },
+        orderBy: { createdAt: "asc" },
+        take: 200,
+      }),
+      prisma.proposalEvent.findMany({
+        where: { quoteId: quote.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
+
+    return res.json({
+      sections: PROPOSAL_SECTIONS.map((name) => {
+        const row = grouped.find((g) => g.section === name);
+        return {
+          section: name,
+          reads: row?._count._all || 0,
+          totalMs: row?._sum.durationMs || 0,
+        };
+      }),
+      comments: comments.map((c) => ({ ...serializeComment(c), authorEmail: c.authorEmail })),
+      recent: lastEvents.map((e) => ({
+        type: e.type,
+        section: e.section,
+        createdAt: e.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Get proposal activity error:", error);
+    return res.status(500).json({ message: "Failed to load activity" });
+  }
+}
+
+/**
+ * Owner replies in the thread.
+ * POST /api/quotes/:id/proposal-comments
+ */
+export async function replyToProposalComment(req, res) {
+  try {
+    const { quote, status } = await findOwnedQuote(req);
+    if (!quote) return res.status(status).json({ message: "Not found" });
+
+    const body = String(req.body?.body || "").trim().slice(0, 2000);
+    if (!body) return res.status(400).json({ message: "Message is required" });
+
+    const authorName =
+      String(req.body?.authorName || "").trim().slice(0, 80) || "Owner";
+    const comment = await prisma.proposalComment.create({
+      data: { quoteId: quote.id, authorName, body, fromClient: false },
+    });
+    return res.status(201).json({ comment: serializeComment(comment) });
+  } catch (error) {
+    console.error("Reply to proposal comment error:", error);
+    return res.status(500).json({ message: "Failed to reply" });
   }
 }

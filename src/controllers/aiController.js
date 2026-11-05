@@ -19,6 +19,7 @@ import {
 import { buildRoughEstimatePrompt } from "../prompts/roughEstimatePrompt.js";
 import { buildAnalyzePrompt } from "../prompts/analyzePrompt.js";
 import { buildProposalPrompt } from "../prompts/proposalPrompt.js";
+import { normalizeProposalOptions } from "../lib/proposalOptions.js";
 import { BASELINE_DISPLAY_NAMES } from "../lib/estimationBaselines.js";
 
 const DEFAULT_AI_RETRY_AFTER_SECONDS = 20;
@@ -465,6 +466,7 @@ export function normalizeProposalDraft(parsedResult, normalizedRequirements, ite
       L("建議先以第一階段完成可商用核心版本，保留後續擴充空間並降低初期開發風險。", "We recommend delivering a commercially usable core in phase one, keeping room to expand and lowering early delivery risk."),
     ),
     keyTakeaways: normalizeProposalList(source.keyTakeaways),
+    options: normalizeProposalOptions(source.options, items),
   };
 
   return {

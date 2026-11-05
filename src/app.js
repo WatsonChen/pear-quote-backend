@@ -42,6 +42,9 @@ const corsOptions = {
   optionsSuccessStatus: 204,
 };
 
+// One proxy hop (Vercel) sits in front of the app; needed for per-client rate limits.
+app.set("trust proxy", 1);
+
 // Middlewares
 app.options("/{*path}", cors(corsOptions));
 app.use(cors(corsOptions));

@@ -62,7 +62,7 @@ export async function sendProposalViewedNotification({
   }
 }
 
-export async function sendProposalAcceptedNotification({
+export async function sendProposalCommentNotification({
   to,
   proposalName,
   clientName,
@@ -72,13 +72,44 @@ export async function sendProposalAcceptedNotification({
   try {
     await sendEmail({
       to,
+      subject: `New question on proposal: ${proposalName}`,
+      text: [
+        `${clientName} asked a question on "${proposalName}".`,
+        clientEmail ? `Email: ${clientEmail}` : null,
+        "",
+        message,
+        "",
+        "Reply from the quote in PearQuote.",
+      ]
+        .filter((line) => line !== null)
+        .join("\n"),
+    });
+  } catch (error) {
+    console.error("Proposal comment notification failed:", error);
+  }
+}
+
+export async function sendProposalAcceptedNotification({
+  to,
+  proposalName,
+  clientName,
+  clientEmail,
+  message,
+  optionName,
+}) {
+  try {
+    await sendEmail({
+      to,
       subject: `Proposal accepted: ${proposalName}`,
       text: [
         `Your Proposal "${proposalName}" was accepted.`,
         `Client: ${clientName}`,
         `Email: ${clientEmail}`,
+        optionName ? `Package: ${optionName}` : null,
         `Message: ${message || "-"}`,
-      ].join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n"),
     });
   } catch (error) {
     console.error("Proposal accepted notification failed:", error);

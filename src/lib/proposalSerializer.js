@@ -6,6 +6,8 @@
  * are never included — they must only exist on authenticated admin responses.
  */
 
+import { withOptionPrices } from "./proposalOptions.js";
+
 export function resolveOwnerUser(workspace) {
   const workspaceUsers = workspace?.users || [];
   return (
@@ -34,7 +36,20 @@ export function buildCompanyInfo(settings, ownerUser) {
   };
 }
 
+/**
+ * proposalContent as the client sees it: package options carry a price that is
+ * computed now from the quote's items, never a stored number.
+ */
+function withPricedOptions(content, quote) {
+  if (!content || !Array.isArray(content.options)) return content || null;
+  return {
+    ...content,
+    options: withOptionPrices(content.options, quote.items, quote.totalAmount),
+  };
+}
+
 export function serializePublicProposal(quote) {
+  const pricedContent = withPricedOptions(quote.proposalContent, quote);
   const ownerUser = resolveOwnerUser(quote.workspace);
   const settings = quote.workspace?.settings || {};
   const companyInfo = buildCompanyInfo(settings, ownerUser);
@@ -43,9 +58,10 @@ export function serializePublicProposal(quote) {
     shareToken: quote.shareToken,
     proposalStatus: quote.proposalStatus,
     acceptedAt: quote.acceptedAt,
+    selectedOptionId: quote.clientSelectedOptionId || null,
     bookingUrl: buildBookingUrl(ownerUser),
     ownerEmail: companyInfo.email,
-    proposalContent: quote.proposalContent || null,
+    proposalContent: pricedContent,
     proposalTheme: quote.proposalTheme || null,
     quote: {
       id: quote.shareToken,
@@ -63,7 +79,7 @@ export function serializePublicProposal(quote) {
       updatedAt: quote.updatedAt,
       proposalStatus: quote.proposalStatus,
       acceptedAt: quote.acceptedAt,
-      proposalContent: quote.proposalContent || null,
+      proposalContent: pricedContent,
       proposalTheme: quote.proposalTheme || null,
       items: (quote.items || []).map((item, index) => ({
         id: `${quote.shareToken}-${index + 1}`,

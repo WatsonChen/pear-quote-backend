@@ -26,7 +26,8 @@ export function buildProposalPrompt({ quote, items, locale }) {
     paymentTermsOnQuote: quote.paymentTerms || null,
     totalAmount: Math.round(Number(quote.totalAmount || 0)),
     currency: "TWD",
-    lineItems: items.map((item) => ({
+    lineItems: items.map((item, index) => ({
+      index,
       description: item.description,
       role: item.suggestedRole || null,
       hours: item.estimatedHours ?? null,
@@ -59,6 +60,7 @@ QUALITY RULES
 - risks: 3-5 risks specific to this project, each with a mitigation that the delivery team controls.
 - nextSteps: 3-4 steps with timing, starting with confirming scope and signing.
 - keyTakeaways: exactly 3 short points.
+- options: 2 or 3 packages the client can choose between, each made only of lineItems (list their "index" values in itemIndexes). The largest package must contain every item. Smaller packages drop the items that can be postponed, never the ones the others depend on. Mark exactly one package "recommended": true. If the quote has fewer than 3 line items or nothing can sensibly be postponed, return an empty array. Do not write prices; they are computed from the items.
 - Keep sentences short. No emojis.
 
 QUOTE:
@@ -86,7 +88,8 @@ OUTPUT SCHEMA:
     "risks": [{ "risk": "string", "mitigation": "string" }],
     "nextSteps": [{ "step": "string", "detail": "string", "timing": "string" }],
     "conclusion": "string (2 sentences)",
-    "keyTakeaways": ["string", "string", "string"]
+    "keyTakeaways": ["string", "string", "string"],
+    "options": [{ "name": "string (e.g. Essentials)", "summary": "string (one sentence on who it suits)", "itemIndexes": [0, 1], "recommended": false }]
   }
 }
 `.trim();

@@ -84,12 +84,44 @@ model Quote {
   clientResponseName String?
   clientResponseEmail String?
   clientResponseMessage String?
+  clientSelectedOptionId String?
   proposalContent Json?
   proposalTheme Json?
   customer          Customer?          @relation(fields: [customerId], references: [id])
   workspace         Workspace          @relation(fields: [workspaceId], references: [id])
   items             QuoteItem[]
   estimateSnapshots EstimateSnapshot[]
+  proposalEvents    ProposalEvent[]
+  proposalComments  ProposalComment[]
+}
+
+/// Something a client did on a shared proposal (read a section, asked, accepted).
+/// Also the natural source for a future webhook feed.
+model ProposalEvent {
+  id         String   @id @default(uuid())
+  quoteId    String
+  type       String
+  section    String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+  quote      Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, createdAt])
+}
+
+/// A question from the client, or the owner's reply, on a shared proposal.
+model ProposalComment {
+  id          String   @id @default(uuid())
+  quoteId     String
+  section     String?
+  authorName  String
+  authorEmail String?
+  body        String
+  fromClient  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, createdAt])
 }
 
 model Customer {
