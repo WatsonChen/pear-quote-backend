@@ -10,6 +10,7 @@ const NEWEBPAY_URL =
 
 const DEFAULT_RETURN_PATH = "/admin/settings?tab=billing";
 const TOP_UP_PLANS = {
+  lite: { amount: 199, creditsAdded: 200 },
   starter: { amount: 499, creditsAdded: 500 },
   pro: { amount: 999, creditsAdded: 1200 },
   business: { amount: 2999, creditsAdded: 4000 },
