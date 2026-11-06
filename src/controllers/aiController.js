@@ -485,6 +485,8 @@ export function normalizeProposalDraft(parsedResult, normalizedRequirements, ite
 
   return {
     ...proposalDraft,
+    // The language the text was written in; the share page opens in it.
+    locale,
     requirementUnderstanding: [
       proposalDraft.executiveSummary,
       ...proposalDraft.painPoints.slice(0, 3),
@@ -528,16 +530,27 @@ export async function generateProposalContentForQuote({
     amount: Number(item.amount || 0),
   }));
   const prompt = buildProposalPrompt({ quote, items, locale, provider, requirementContext });
-  const text = await generateAiJsonText([{ text: prompt }], {
-    purpose: "analyze",
-    modelName: getGeminiModelName("analyze"),
-    fallbackModelNames: buildAnalyzeFallbackModelNames(),
-    maxQueueWaitMs: TRANSLATE_QUEUE_WAIT_MS,
-    // A full proposal is a long answer; the default 30s client timeout is too tight.
-    timeoutMs: 90_000,
-    maxTokens: 10_000,
-  });
-  const parsed = parseAiJsonPayload(text, "proposal response");
+  // A long answer is occasionally cut or malformed; one more try is cheaper
+  // than failing the whole generation.
+  let parsed;
+  for (let attempt = 1; ; attempt += 1) {
+    const text = await generateAiJsonText([{ text: prompt }], {
+      purpose: "analyze",
+      modelName: getGeminiModelName("analyze"),
+      fallbackModelNames: buildAnalyzeFallbackModelNames(),
+      maxQueueWaitMs: TRANSLATE_QUEUE_WAIT_MS,
+      // A full proposal is a long answer; the default 30s client timeout is too tight.
+      timeoutMs: 90_000,
+      maxTokens: 10_000,
+    });
+    try {
+      parsed = parseAiJsonPayload(text, "proposal response");
+      break;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      console.warn("[AI] proposal response was not valid JSON; retrying once");
+    }
+  }
   return normalizeProposalDraft(
     { ...parsed, expectedDays: quote.expectedDays, summary: quote.description, provider },
     quote.description || "",
