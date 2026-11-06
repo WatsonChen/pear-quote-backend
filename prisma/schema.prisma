@@ -87,6 +87,8 @@ model Quote {
   clientSelectedOptionId String?
   proposalContent Json?
   proposalTheme Json?
+  /// When the owner last opened the client's questions; newer client comments are unread.
+  commentsSeenAt DateTime?
   customer          Customer?          @relation(fields: [customerId], references: [id])
   workspace         Workspace          @relation(fields: [workspaceId], references: [id])
   items             QuoteItem[]

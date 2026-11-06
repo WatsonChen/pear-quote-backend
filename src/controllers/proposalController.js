@@ -434,9 +434,89 @@ export async function replyToProposalComment(req, res) {
     const comment = await prisma.proposalComment.create({
       data: { quoteId: quote.id, authorName, body, fromClient: false },
     });
+    // Answering means the owner has read everything so far.
+    await prisma.quote.update({
+      where: { id: quote.id },
+      data: { commentsSeenAt: new Date() },
+    });
     return res.status(201).json({ comment: serializeComment(comment) });
   } catch (error) {
     console.error("Reply to proposal comment error:", error);
     return res.status(500).json({ message: "Failed to reply" });
+  }
+}
+
+/**
+ * Owner: projects with client questions not yet opened, newest first.
+ * GET /api/quotes/unread-comments
+ */
+export async function getUnreadProposalComments(req, res) {
+  try {
+    const quotes = await prisma.quote.findMany({
+      where: {
+        workspaceId: req.workspace?.id,
+        proposalComments: { some: { fromClient: true } },
+      },
+      select: {
+        id: true,
+        projectName: true,
+        customerName: true,
+        commentsSeenAt: true,
+        proposalComments: {
+          where: { fromClient: true },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        },
+      },
+    });
+
+    const items = quotes
+      .map((quote) => {
+        const unread = quote.proposalComments.filter(
+          (c) => !quote.commentsSeenAt || c.createdAt > quote.commentsSeenAt,
+        );
+        const latest = unread[0];
+        if (!latest) return null;
+        return {
+          quoteId: quote.id,
+          projectName: quote.projectName,
+          customerName: quote.customerName,
+          count: unread.length,
+          latest: {
+            authorName: latest.authorName,
+            body: latest.body.slice(0, 160),
+            createdAt: latest.createdAt,
+          },
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.latest.createdAt) - new Date(a.latest.createdAt));
+
+    return res.json({
+      total: items.reduce((sum, item) => sum + item.count, 0),
+      items,
+    });
+  } catch (error) {
+    console.error("Get unread proposal comments error:", error);
+    return res.status(500).json({ message: "Failed to load unread questions" });
+  }
+}
+
+/**
+ * Owner opened the questions of one project.
+ * POST /api/quotes/:id/proposal-comments/seen
+ */
+export async function markProposalCommentsSeen(req, res) {
+  try {
+    const { quote, status } = await findOwnedQuote(req);
+    if (!quote) return res.status(status).json({ message: "Not found" });
+    await prisma.quote.update({
+      where: { id: quote.id },
+      data: { commentsSeenAt: new Date() },
+    });
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("Mark proposal comments seen error:", error);
+    return res.status(500).json({ message: "Failed to update" });
   }
 }
