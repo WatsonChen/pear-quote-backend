@@ -115,3 +115,25 @@ export async function sendProposalAcceptedNotification({
     console.error("Proposal accepted notification failed:", error);
   }
 }
+
+/** Tell the client their question was answered, with a way back to the proposal. */
+export async function sendProposalReplyNotification({ to, proposalName, message, shareUrl, locale }) {
+  try {
+    const en = locale === "en";
+    await sendEmail({
+      to,
+      subject: en ? `Reply on your proposal: ${proposalName}` : `提案回覆：${proposalName}`,
+      text: [
+        en ? `You have a reply on "${proposalName}":` : `你在「${proposalName}」的提問有回覆了：`,
+        "",
+        message,
+        "",
+        shareUrl ? (en ? `Open the proposal: ${shareUrl}` : `查看提案：${shareUrl}`) : null,
+      ]
+        .filter((line) => line !== null)
+        .join("\n"),
+    });
+  } catch (error) {
+    console.error("Proposal reply notification failed:", error);
+  }
+}

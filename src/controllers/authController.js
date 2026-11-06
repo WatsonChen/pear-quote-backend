@@ -1,41 +1,10 @@
 // src/controllers/authController.js
 import {
-  sendLoginCode,
   verifyPassword,
   getUserById,
   socialLogin,
   acceptCurrentTerms,
 } from "../services/authService.js";
-
-/**
- * Send login verification code
- * POST /api/auth/send-code
- */
-export async function handleSendCode(req, res) {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
-
-    await sendLoginCode(email);
-
-    return res.json({
-      success: true,
-      message: "Verification code sent",
-    });
-  } catch (error) {
-    console.error("Send code error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-}
 
 /**
  * Handle login (password)
@@ -84,12 +53,10 @@ export async function handleLogin(req, res) {
  * POST /api/social-login
  */
 export async function handleSocialLogin(req, res) {
-  console.log("[Auth] handleSocialLogin called");
   try {
     const { email } = req.body;
 
     if (!email) {
-      console.log("[Auth] Email missing in body");
       return res.status(400).json({
         success: false,
         message: "Email is required",
@@ -97,7 +64,6 @@ export async function handleSocialLogin(req, res) {
     }
 
     const result = await socialLogin(email);
-    console.log("[Auth] socialLogin success");
 
     return res.json({
       success: true,

@@ -1,3 +1,4 @@
+import { chargeCredits, handleInsufficientCredits } from "../lib/credits.js";
 import { loadProposalContext } from "../lib/proposalContext.js";
 import { generateProposalContentForQuote } from "./aiController.js";
 import { hasAiApiKey } from "../lib/llm.js";
@@ -2084,14 +2085,8 @@ export async function generateQuote(req, res) {
         },
       });
 
-      const updatedWorkspace = await tx.workspace.update({
-        where: { id: workspaceId },
-        data: {
-          creditBalance: {
-            decrement: creditCost,
-          },
-        },
-      });
+      await chargeCredits(tx, workspaceId, creditCost);
+      const updatedWorkspace = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { creditBalance: true } });
 
       return { updatedQuote, updatedWorkspace };
     });
@@ -2103,6 +2098,7 @@ export async function generateQuote(req, res) {
       remainingBalance: result.updatedWorkspace.creditBalance,
     });
   } catch (error) {
+    if (handleInsufficientCredits(res, error)) return;
     console.error("Generate quote error:", error);
     return res.status(500).json({
       success: false,

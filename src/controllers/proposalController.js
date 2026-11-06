@@ -2,10 +2,12 @@ import prisma from "../lib/prisma.js";
 import {
   sendProposalAcceptedNotification,
   sendProposalCommentNotification,
+  sendProposalReplyNotification,
   sendProposalViewedNotification,
 } from "../services/proposalNotificationService.js";
 import { serializePublicProposal, resolveOwnerUser } from "../lib/proposalSerializer.js";
 import { PROPOSAL_SECTIONS, isKnownOptionId } from "../lib/proposalOptions.js";
+import { detectTextLocale } from "../lib/textLocale.js";
 
 const TERMINAL_PROPOSAL_STATUSES = new Set(["accepted", "rejected"]);
 
@@ -222,6 +224,30 @@ export async function acceptProposal(req, res) {
 const MAX_SECTION_MS = 10 * 60 * 1000;
 
 /**
+ * Record a client's click on a call to action (book a call, download the PDF).
+ * POST /api/proposals/:shareToken/action
+ */
+const CLIENT_ACTIONS = ["book", "download"];
+export async function trackProposalAction(req, res) {
+  try {
+    const action = String(req.body?.action || "");
+    if (!CLIENT_ACTIONS.includes(action)) {
+      return res.status(400).json({ success: false, message: "Invalid action" });
+    }
+    const quote = await prisma.quote.findUnique({
+      where: { shareToken: req.params.shareToken },
+      select: { id: true },
+    });
+    if (!quote) return res.status(404).json({ success: false, message: "Proposal not found" });
+    await prisma.proposalEvent.create({ data: { quoteId: quote.id, type: action } });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Track proposal action error:", error);
+    return res.status(500).json({ success: false, message: "Failed to track" });
+  }
+}
+
+/**
  * Record that a client spent time on a section.
  * POST /api/proposals/:shareToken/events
  */
@@ -360,7 +386,7 @@ export async function createPublicComment(req, res) {
 async function findOwnedQuote(req) {
   const quote = await prisma.quote.findUnique({
     where: { id: req.params.id },
-    select: { id: true, workspaceId: true },
+    select: { id: true, workspaceId: true, shareToken: true, projectName: true },
   });
   if (!quote) return { status: 404 };
   if (quote.workspaceId !== req.workspace?.id) return { status: 403 };
@@ -376,7 +402,7 @@ export async function getProposalActivity(req, res) {
     const { quote, status } = await findOwnedQuote(req);
     if (!quote) return res.status(status).json({ message: "Not found" });
 
-    const [grouped, comments, lastEvents] = await Promise.all([
+    const [grouped, comments, lastEvents, actionCounts] = await Promise.all([
       prisma.proposalEvent.groupBy({
         by: ["section"],
         where: { quoteId: quote.id, type: "section" },
@@ -393,6 +419,11 @@ export async function getProposalActivity(req, res) {
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
+      prisma.proposalEvent.groupBy({
+        by: ["type"],
+        where: { quoteId: quote.id, type: { in: CLIENT_ACTIONS } },
+        _count: { _all: true },
+      }),
     ]);
 
     return res.json({
@@ -404,6 +435,7 @@ export async function getProposalActivity(req, res) {
           totalMs: row?._sum.durationMs || 0,
         };
       }),
+      actions: Object.fromEntries(CLIENT_ACTIONS.map((a) => [a, actionCounts.find((r) => r.type === a)?._count._all || 0])),
       comments: comments.map((c) => ({ ...serializeComment(c), authorEmail: c.authorEmail })),
       recent: lastEvents.map((e) => ({
         type: e.type,
@@ -439,6 +471,22 @@ export async function replyToProposalComment(req, res) {
       where: { id: quote.id },
       data: { commentsSeenAt: new Date() },
     });
+    // A client who left an email hears about the reply without having to come back and look.
+    const asked = await prisma.proposalComment.findFirst({
+      where: { quoteId: quote.id, fromClient: true, authorEmail: { not: null } },
+      orderBy: { createdAt: "desc" },
+      select: { authorEmail: true },
+    });
+    if (asked?.authorEmail && quote.shareToken) {
+      const base = (process.env.FRONTEND_URL || "").split(",")[0].trim().replace(/\/$/, "");
+      await sendProposalReplyNotification({
+        to: asked.authorEmail,
+        proposalName: quote.projectName,
+        message: body,
+        shareUrl: base ? `${base}/p/${quote.shareToken}` : null,
+        locale: detectTextLocale(body, "en"),
+      });
+    }
     return res.status(201).json({ comment: serializeComment(comment) });
   } catch (error) {
     console.error("Reply to proposal comment error:", error);
@@ -455,13 +503,15 @@ export async function getUnreadProposalComments(req, res) {
     const quotes = await prisma.quote.findMany({
       where: {
         workspaceId: req.workspace?.id,
-        proposalComments: { some: { fromClient: true } },
+        OR: [{ proposalComments: { some: { fromClient: true } } }, { acceptedAt: { not: null } }],
       },
       select: {
         id: true,
         projectName: true,
         customerName: true,
         commentsSeenAt: true,
+        acceptedAt: true,
+        clientResponseName: true,
         proposalComments: {
           where: { fromClient: true },
           orderBy: { createdAt: "desc" },
@@ -476,17 +526,17 @@ export async function getUnreadProposalComments(req, res) {
           (c) => !quote.commentsSeenAt || c.createdAt > quote.commentsSeenAt,
         );
         const latest = unread[0];
-        if (!latest) return null;
+        const accepted = Boolean(quote.acceptedAt) && (!quote.commentsSeenAt || quote.acceptedAt > quote.commentsSeenAt);
+        if (!latest && !accepted) return null;
         return {
           quoteId: quote.id,
           projectName: quote.projectName,
           customerName: quote.customerName,
-          count: unread.length,
-          latest: {
-            authorName: latest.authorName,
-            body: latest.body.slice(0, 160),
-            createdAt: latest.createdAt,
-          },
+          count: unread.length + (accepted ? 1 : 0),
+          accepted,
+          latest: latest
+            ? { authorName: latest.authorName, body: latest.body.slice(0, 160), createdAt: latest.createdAt }
+            : { authorName: quote.clientResponseName || "", body: "", createdAt: quote.acceptedAt },
         };
       })
       .filter(Boolean)

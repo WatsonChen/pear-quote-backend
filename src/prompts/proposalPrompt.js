@@ -68,7 +68,7 @@ GROUNDING RULES
 QUALITY RULES
 - Specific over generic. Name the actual features from the line items and brief. Avoid filler such as "high quality", "seamless", "cutting-edge".
 - executiveSummary: 2-3 sentences covering the goal, what will be delivered first, and the outcome for the client.
-- painPoints: 3-5 problems this client is likely facing, inferred from the brief. Write them from the client's point of view.
+- painPoints: 3-4 problems this client is likely facing, inferred from the brief. Write them from the client's point of view.
 - coreWorkflow: 4-6 steps of how the finished product is used, in order.
 - modules: group the line items into 3-6 deliverable modules. Each has 3-4 bullets describing concrete deliverables.
 - includedScope / excludedScope: concrete and testable. Excluded scope should prevent the most likely disputes for this project type.
@@ -78,6 +78,7 @@ QUALITY RULES
 - keyTakeaways: exactly 3 short points.
 - options: 2 or 3 packages the client can choose between, each made only of lineItems (list their "index" values in itemIndexes). The largest package must contain every item. Smaller packages drop only items that can genuinely be postponed. Every package must work on its own: before dropping an item, read the remaining items' descriptions and check whether any of them operates on, validates, fulfils, reports on or manages what the dropped item produces (for example, a staff back office that validates redemptions cannot ship without the rewards catalog it validates; a dashboard needs the data source it displays). If an item depends on a dropped one, drop both or keep both; when unsure, keep it. Every package keeps the testing/QA, launch/deployment and project-management items. A package summary may only mention what its own items contain, never a feature that none of them describes. Mark exactly one package "recommended": true. If the quote has fewer than 3 line items or nothing can sensibly be postponed, return an empty array. Do not write prices; they are computed from the items.
 - Keep sentences short. No emojis.
+- LENGTH: a client skims. Every list item is ONE sentence of at most 22 words (about 40 Chinese characters). includedScope and excludedScope have at most 6 items each; futureExpansion at most 3; painPoints at most 4. Each timeline "detail" and risk "mitigation" is one sentence. Cut anything that repeats another section.
 
 QUOTE:
 ${JSON.stringify(source, null, 2)}

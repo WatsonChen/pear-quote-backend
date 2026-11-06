@@ -6,13 +6,6 @@ import bcrypt from "bcrypt"; // Keep for createUser if needed for tests, but mai
 
 export const CURRENT_TERMS_VERSION = "2026-03-26";
 
-/**
- * Generate a random 6-digit numeric code
- */
-function generateOTP() {
-  return crypto.randomInt(100000, 999999).toString();
-}
-
 function buildAuthUser(user, workspace) {
   return {
     id: user.id,
@@ -23,35 +16,6 @@ function buildAuthUser(user, workspace) {
     termsVersionAccepted: user.termsVersionAccepted,
     currentTermsVersion: CURRENT_TERMS_VERSION,
   };
-}
-
-/**
- * Send a login code to the given email
- * @param {string} email
- * @returns {Promise<void>}
- */
-export async function sendLoginCode(email) {
-  const code = generateOTP();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
-
-  // Upsert user: create if not exists, otherwise update OTP
-  // Note: We don't require a password anymore.
-  await prisma.user.upsert({
-    where: { email },
-    update: {
-      otpCode: code,
-      otpExpiresAt: expiresAt,
-    },
-    create: {
-      email,
-      otpCode: code,
-      otpExpiresAt: expiresAt,
-      // passwordHash is optional now, so we can omit it or set null
-    },
-  });
-
-  // TODO: Integrate with a real email service (e.g., SendGrid, AWS SES)
-  console.log(`[MOCK EMAIL] Login code for ${email}: ${code}`);
 }
 
 /**

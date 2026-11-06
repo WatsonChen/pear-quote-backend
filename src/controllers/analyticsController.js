@@ -1,3 +1,4 @@
+import { chargeCredits, handleInsufficientCredits } from "../lib/credits.js";
 import prisma from "../lib/prisma.js";
 import {
   extractGeminiRetryAfterSeconds,
@@ -375,19 +376,13 @@ ${dataSummary}
     }
 
     // 4. Deduct credits after successful AI generation
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        creditBalance: {
-          decrement: creditCost,
-        },
-      },
-    });
+    await chargeCredits(prisma, workspaceId, creditCost);
 
     res.json({
       insight: text.trim(),
     });
   } catch (error) {
+    if (handleInsufficientCredits(res, error)) return;
     console.error("Failed to generate AI insight:", error);
     res
       .status(500)

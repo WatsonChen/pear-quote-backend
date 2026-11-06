@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma.js";
 import crypto from "crypto";
+import { isValidTradeSha } from "../lib/newebpaySignature.js";
 
 const NEWEBPAY_HASH_KEY = process.env.NEWEBPAY_HASH_KEY;
 const NEWEBPAY_HASH_IV = process.env.NEWEBPAY_HASH_IV;
@@ -207,10 +208,14 @@ export async function createTopupOrder(req, res) {
 export async function handleWebhook(req, res) {
   try {
     const data = req.body;
-    console.log("[NewebPay Webhook] Received:", data);
-
     if (!data || !data.TradeInfo) {
       return res.status(400).send("No TradeInfo found");
+    }
+
+    // The gateway signs TradeInfo with the shared key; anything unsigned or altered is not the gateway.
+    if (!isValidTradeSha(data.TradeInfo, data.TradeSha, { hashKey: NEWEBPAY_HASH_KEY, hashIv: NEWEBPAY_HASH_IV })) {
+      console.error("[NewebPay Webhook] Rejected: TradeSha does not match");
+      return res.status(400).send("Invalid signature");
     }
 
     // 1. Decrypt TradeInfo
@@ -221,8 +226,6 @@ export async function handleWebhook(req, res) {
         console.error("[NewebPay Webhook] Decrypt error:", error);
         return res.status(400).send("Decrypt Error");
     }
-
-    console.log("[NewebPay Webhook] Decrypted Info:", decryptedInfo);
 
     // 2. Process the Payment Status
     const result = decryptedInfo.Result || {};
@@ -250,26 +253,31 @@ export async function handleWebhook(req, res) {
         return res.send("OK");
       }
 
-      // 3. Update Order and Add Credits inside a Transaction
-      await prisma.$transaction([
-        prisma.order.update({
-          where: { orderNo },
+      // The amount paid must be the amount ordered.
+      if (Number(result.Amt) !== order.amount) {
+        console.error(`[NewebPay Webhook] Amount mismatch for ${orderNo}: expected ${order.amount}, got ${result.Amt}`);
+        return res.status(400).send("Amount mismatch");
+      }
+
+      // 3. Mark paid and add credits once. The conditional update means a repeated or
+      // simultaneous notice finds the order already paid and adds nothing.
+      await prisma.$transaction(async (tx) => {
+        const claimed = await tx.order.updateMany({
+          where: { orderNo, status: { not: "PAID" } },
           data: {
             status: "PAID",
             tradeNo: result.TradeNo,
             paymentDate: new Date(),
             paymentMethod: result.PaymentType || "CREDIT",
           },
-        }),
-        prisma.workspace.update({
-          where: { id: order.workspaceId },
-          data: {
-            creditBalance: {
-              increment: order.creditsAdded,
-            },
-          },
-        }),
-      ]);
+        });
+        if (claimed.count === 1) {
+          await tx.workspace.update({
+            where: { id: order.workspaceId },
+            data: { creditBalance: { increment: order.creditsAdded } },
+          });
+        }
+      });
 
       console.log(
         `[NewebPay Webhook] Order ${orderNo} paid. Added ${order.creditsAdded} credits to Workspace ${order.workspaceId}`,

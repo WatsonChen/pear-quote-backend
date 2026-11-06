@@ -1,3 +1,4 @@
+import { chargeCredits, handleInsufficientCredits } from "../lib/credits.js";
 import prisma from "../lib/prisma.js";
 import {
   extractGeminiRetryAfterSeconds,
@@ -1617,14 +1618,7 @@ ${JSON.stringify(sourcePayload, null, 2)}
         items: buildTranslatedItemCopies(quote.items, parsedResult?.items),
       });
 
-      await tx.workspace.update({
-        where: { id: workspaceId },
-        data: {
-          creditBalance: {
-            decrement: creditCost,
-          },
-        },
-      });
+      await chargeCredits(tx, workspaceId, creditCost);
 
       return draftCopy;
     });
@@ -1635,6 +1629,7 @@ ${JSON.stringify(sourcePayload, null, 2)}
       quote: translatedQuote,
     });
   } catch (error) {
+    if (handleInsufficientCredits(res, error)) return;
     console.error("translateQuote error:", error);
     return res.status(500).json({
       success: false,
@@ -1812,14 +1807,7 @@ ${JSON.stringify(sourcePayload, null, 2)}
         expectedDays: refinedExpectedDays,
       });
 
-      await tx.workspace.update({
-        where: { id: workspaceId },
-        data: {
-          creditBalance: {
-            decrement: creditCost,
-          },
-        },
-      });
+      await chargeCredits(tx, workspaceId, creditCost);
 
       return draftCopy;
     });
@@ -1830,6 +1818,7 @@ ${JSON.stringify(sourcePayload, null, 2)}
       quote: refinedQuote,
     });
   } catch (error) {
+    if (handleInsufficientCredits(res, error)) return;
     console.error("refineQuote error:", error);
     return res.status(500).json({
       success: false,
@@ -2025,14 +2014,7 @@ ${cleanInstruction || "(no specific instruction — improve clarity, structure, 
           .filter(Boolean)
       : sourceBullets;
 
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        creditBalance: {
-          decrement: creditCost,
-        },
-      },
-    });
+    await chargeCredits(prisma, workspaceId, creditCost);
 
     return res.json({
       success: true,
@@ -2043,6 +2025,7 @@ ${cleanInstruction || "(no specific instruction — improve clarity, structure, 
       },
     });
   } catch (error) {
+    if (handleInsufficientCredits(res, error)) return;
     console.error("refineProposalSection error:", error);
     return res.status(500).json({
       success: false,
@@ -2317,14 +2300,7 @@ export async function analyzeRequirements(req, res) {
         ? Math.round(rawConfidenceScore)
         : null;
 
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        creditBalance: {
-          decrement: creditCost,
-        },
-      },
-    });
+    await chargeCredits(prisma, workspaceId, creditCost);
 
     return res.json({
       summary: normalizedSummary,
@@ -2340,6 +2316,7 @@ export async function analyzeRequirements(req, res) {
       confidenceScore: normalizedConfidenceScore,
     });
   } catch (error) {
+    if (handleInsufficientCredits(res, error)) return;
     console.error("CRITICAL AI Analysis error:", error);
     // Return the full error message and stack for debugging
     return res.status(500).json({

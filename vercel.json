@@ -2,7 +2,8 @@
   "version": 2,
   "functions": {
     "server.js": {
-      "includeFiles": "openapi.yaml"
+      "includeFiles": "openapi.yaml",
+      "maxDuration": 60
     }
   }
 }

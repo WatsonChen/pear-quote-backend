@@ -2,7 +2,6 @@
 import { Router } from "express";
 import {
   handleLogin,
-  handleSendCode,
   handleGetMe,
   handleSocialLogin,
   handleAcceptTerms,
@@ -13,7 +12,6 @@ import { requireInternalAuth } from "../middleware/internalAuth.js";
 const router = Router();
 
 // Public routes
-router.post("/sentotp", handleSendCode);
 router.post("/login", handleLogin);
 // Trusted server-to-server only: the Next.js server vouches for a verified OAuth email.
 router.post("/social-login", requireInternalAuth, handleSocialLogin);
