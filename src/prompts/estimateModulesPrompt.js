@@ -1,3 +1,4 @@
+import { outputLanguageOverride } from "../lib/textLocale.js";
 /**
  * Builds the prompt for POST /api/ai/estimate-modules.
  *
@@ -9,7 +10,7 @@
  * @param {Array}  params.baselines        - Available baseline modules (deprecated ones already filtered out)
  * @returns {string}
  */
-export function buildEstimateModulesPrompt({ requirementSpec, baselines }) {
+export function buildEstimateModulesPrompt({ requirementSpec, baselines, locale = "zh-TW" }) {
   // Filter deprecated baselines — they exist only for backward compat with historical snapshots
   const activeBaselines = baselines.filter((b) => !b.deprecated);
 
@@ -65,7 +66,7 @@ OUTPUT SCHEMA:
   "modules": [
     {
       "id": "string (e.g. M1, M2)",
-      "name": "string (繁體中文，模組名稱)",
+      "name": "string (繁體中文，模組名稱 — name what this module does in THIS project, e.g. \"LINE 預約提醒\", never the generic baseline name)",
       "description": "string (繁體中文，一句話描述此模組的交付範圍)",
       "features": ["string (繁體中文，此模組包含的功能點)"],
       "requirementIds": ["string (requirement ids this module addresses, e.g. ['R1','R3'])"],
@@ -136,5 +137,5 @@ STRICT RULES — EMAIL:
 
 PHASED PROJECTS NOTE:
 For large projects (SaaS, mobile app) that could be split into phases: estimate the FULL v1 scope described, and note phasing in estimationNotes only (e.g. "建議分兩期：Phase 1 為核心功能，Phase 2 為報表與進階設定"). Do NOT artificially reduce scope.
-`;
+${outputLanguageOverride(locale)}`;
 }

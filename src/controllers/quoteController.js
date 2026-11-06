@@ -2035,14 +2035,21 @@ export async function generateQuote(req, res) {
 
     // Write the proposal with the AI before charging; if it cannot answer, the
     // user keeps their credits and nothing changes.
+    // The wizard saves a quick draft from the requirement analysis. The first
+    // time a quote is turned into a proposal that draft is replaced by the full
+    // write-up (packages, company profile, request analysis). A proposal that
+    // was already generated, and may have been edited, is left alone.
     let proposalContent = quote.proposalContent;
-    if (!proposalContent) {
+    const needsFullWriteUp =
+      !proposalContent || (!quote.shareToken && !proposalContent.fullProposal);
+    if (needsFullWriteUp) {
       if (hasAiApiKey()) {
         try {
           const context = await loadProposalContext({ workspaceId, quoteId: id });
           proposalContent = await generateProposalContentForQuote({
             quote,
-            locale: req.body?.locale,
+            // Same language as the analysis draft, which followed the brief.
+            locale: quote.proposalContent?.locale || req.body?.locale,
             ...context,
           });
         } catch (aiError) {
@@ -2055,7 +2062,7 @@ export async function generateQuote(req, res) {
           });
         }
       } else {
-        proposalContent = buildDefaultProposalContent(quote);
+        proposalContent = proposalContent || buildDefaultProposalContent(quote);
       }
     }
 

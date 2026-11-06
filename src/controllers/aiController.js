@@ -18,6 +18,7 @@ import {
 } from "../lib/roughEstimateCache.js";
 import { buildRoughEstimatePrompt } from "../prompts/roughEstimatePrompt.js";
 import { buildAnalyzePrompt } from "../prompts/analyzePrompt.js";
+import { detectTextLocale } from "../lib/textLocale.js";
 import { buildProposalPrompt } from "../prompts/proposalPrompt.js";
 import { normalizeProposalOptions } from "../lib/proposalOptions.js";
 import { BASELINE_DISPLAY_NAMES } from "../lib/estimationBaselines.js";
@@ -551,12 +552,16 @@ export async function generateProposalContentForQuote({
       console.warn("[AI] proposal response was not valid JSON; retrying once");
     }
   }
-  return normalizeProposalDraft(
-    { ...parsed, expectedDays: quote.expectedDays, summary: quote.description, provider },
-    quote.description || "",
-    items,
-    locale,
-  );
+  return {
+    ...normalizeProposalDraft(
+      { ...parsed, expectedDays: quote.expectedDays, summary: quote.description, provider },
+      quote.description || "",
+      items,
+      locale,
+    ),
+    // Marks the full write-up, as opposed to the quick draft made at analysis.
+    fullProposal: true,
+  };
 }
 
 function readPositiveIntEnv(name, fallback) {
@@ -2125,11 +2130,14 @@ export async function analyzeRequirements(req, res) {
       /裝潢|装修|裝修|室內|室内|工程|施工|拆除|泥作|木作|水電|机电|機電|管線|管道|天花|地坪|油漆|建材|櫃體|系统柜|系統櫃|家具|傢俱|燈具|灯具|衛浴|卫浴|防水|renovation|interior|construction|fit[ -]?out/i.test(
         `${normalizedProjectType} ${normalizedRequirements} ${normalizedTemplateContext}`,
       );
+    // Answer in the language the brief is written in.
+    const briefLocale = detectTextLocale(normalizedRequirements, req.body?.locale === "en" ? "en" : "zh-TW");
     const prompt = buildAnalyzePrompt({
       normalizedProjectType,
       normalizedRequirements,
       normalizedTemplateContext,
       isMaterialHeavyProject,
+      locale: briefLocale,
     });
 
     console.log("Calling Gemini AI via official SDK with payload:", {
@@ -2280,6 +2288,7 @@ export async function analyzeRequirements(req, res) {
       parsedResult,
       normalizedRequirements,
       normalizedItems,
+      briefLocale,
     );
 
     const VALID_PRICE_IMPACTS = new Set(["high", "medium", "low"]);

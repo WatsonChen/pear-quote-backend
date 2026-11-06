@@ -1,3 +1,4 @@
+import { outputLanguageOverride } from "../lib/textLocale.js";
 /**
  * Builds the prompt for POST /api/ai/analyze (analyzeRequirements).
  *
@@ -13,6 +14,7 @@ export function buildAnalyzePrompt({
   normalizedRequirements,
   normalizedTemplateContext,
   isMaterialHeavyProject,
+  locale = "zh-TW",
 }) {
   return `
 Please analyze these project requirements and attached screenshots. Your primary output is a client-ready proposal draft comparable to a polished first-stage project proposal deck. Also include quote items as a pricing appendix.
@@ -203,5 +205,5 @@ ${normalizedTemplateContext || "No selected quote template context."}
 
 User Requirements:
 ${normalizedRequirements || "No additional user-entered requirements."}
-`;
+${outputLanguageOverride(locale)}`;
 }

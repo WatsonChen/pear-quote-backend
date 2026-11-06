@@ -7,6 +7,7 @@ import {
 } from "../lib/gemini.js";
 import { generateAiJsonText, hasAiApiKey } from "../lib/llm.js";
 import { buildParseConversationPrompt } from "../prompts/parseConversationPrompt.js";
+import { detectTextLocale } from "../lib/textLocale.js";
 
 const VALID_RAW_INPUT_TYPES = new Set(["conversation", "email", "meeting_notes", "short_brief", "mixed"]);
 const VALID_SPEAKER_ROLES = new Set(["client", "sales", "developer", "decision_maker", "unknown"]);
@@ -107,7 +108,10 @@ export async function parseConversationCore({ rawInput }) {
   }
 
   const modelName = getGeminiModelName("analyze");
-  const prompt = buildParseConversationPrompt({ rawInput: normalizedInput });
+  const prompt = buildParseConversationPrompt({
+    rawInput: normalizedInput,
+    locale: detectTextLocale(normalizedInput),
+  });
 
   const text = await generateAiJsonText([{ text: prompt }], {
     purpose: "analyze",

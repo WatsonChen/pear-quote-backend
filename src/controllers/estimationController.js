@@ -8,6 +8,7 @@ import {
 } from "../lib/gemini.js";
 import { generateAiJsonText, hasAiApiKey } from "../lib/llm.js";
 import { buildEstimateModulesPrompt } from "../prompts/estimateModulesPrompt.js";
+import { detectTextLocale } from "../lib/textLocale.js";
 import {
   getEstimationBaselines,
   COMPLEXITY_MULTIPLIERS,
@@ -227,7 +228,14 @@ export async function estimateModulesCore({
     : {};
 
   const modelName = getGeminiModelName("analyze");
-  const prompt = buildEstimateModulesPrompt({ requirementSpec, baselines });
+  const specText = Array.isArray(requirementSpec?.requirements)
+    ? requirementSpec.requirements.map((r) => r?.text || "").join(" ")
+    : "";
+  const prompt = buildEstimateModulesPrompt({
+    requirementSpec,
+    baselines,
+    locale: detectTextLocale(specText),
+  });
 
   // Single Gemini call. Errors propagate with status info for the caller to translate.
   const text = await generateAiJsonText([{ text: prompt }], {

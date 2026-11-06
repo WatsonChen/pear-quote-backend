@@ -1,3 +1,4 @@
+import { outputLanguageOverride } from "../lib/textLocale.js";
 /**
  * Builds the prompt for POST /api/ai/parse-conversation.
  *
@@ -5,7 +6,7 @@
  * @param {string} params.rawInput  - Raw user-pasted text (LINE chat, email, etc.)
  * @returns {string}
  */
-export function buildParseConversationPrompt({ rawInput }) {
+export function buildParseConversationPrompt({ rawInput, locale = "zh-TW" }) {
   return `
 You are an expert software project analyst. The user has pasted raw conversation text — it may be a LINE chat log, WhatsApp thread, email chain, meeting notes, or a mix of all of the above.
 
@@ -89,5 +90,5 @@ RULES:
 
 RAW INPUT:
 ${rawInput || "(no input provided)"}
-`;
+${outputLanguageOverride(locale)}`;
 }
