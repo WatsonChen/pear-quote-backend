@@ -115,6 +115,15 @@ function create_mpg_aes_decrypt(TradeInfo) {
  */
 export async function createTopupOrder(req, res) {
   try {
+    // Without the gateway keys no order can be signed; say so before an order row is created.
+    if (!NEWEBPAY_MERCHANT_ID || !NEWEBPAY_HASH_KEY || !NEWEBPAY_HASH_IV) {
+      console.error("[Payments] NewebPay keys are not configured");
+      return res.status(503).json({
+        success: false,
+        message: "Payments are not configured",
+        errorCode: "PAYMENT_NOT_CONFIGURED",
+      });
+    }
     const workspaceId = req.workspace?.id;
     const { planKey, amount, creditsAdded, returnPath } = req.body;
 
