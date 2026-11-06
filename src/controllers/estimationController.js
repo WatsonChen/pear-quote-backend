@@ -9,6 +9,7 @@ import {
 import { generateAiJsonText, hasAiApiKey } from "../lib/llm.js";
 import { buildEstimateModulesPrompt } from "../prompts/estimateModulesPrompt.js";
 import { detectTextLocale } from "../lib/textLocale.js";
+import { RISK_FLAGS, buildEnglishQuestions, buildRiskSummary, localizeModules } from "../lib/catalogLocalize.js";
 import {
   getEstimationBaselines,
   COMPLEXITY_MULTIPLIERS,
@@ -231,6 +232,7 @@ export async function estimateModulesCore({
   const specText = Array.isArray(requirementSpec?.requirements)
     ? requirementSpec.requirements.map((r) => r?.text || "").join(" ")
     : "";
+  const locale = detectTextLocale(specText);
   const prompt = buildEstimateModulesPrompt({
     requirementSpec,
     baselines,
@@ -320,9 +322,11 @@ export async function estimateModulesCore({
       Object.keys(calibrationProfile.estimateCalibrationFactors ?? {}).length > 0 ||
       Object.keys(calibrationProfile.pricingCalibrationFactors ?? {}).length > 0
     );
-    const modules = hasCalibration
+    const calibratedModules = hasCalibration
       ? uncalibratedModules.map((m) => applyCalibrationToModule(m, m.baselineKey, calibrationProfile))
       : uncalibratedModules;
+    // An English brief gets the catalog lines in English too (calibration and prices are untouched).
+    const modules = locale === "en" ? await localizeModules(calibratedModules) : calibratedModules;
 
     // Aggregate ranges and missingInfo across all modules
     const zero = { min: 0, max: 0, currency: "TWD" };
@@ -361,34 +365,36 @@ export async function estimateModulesCore({
     // Rules: items already ending with ？ pass through; items starting with action verbs get ？;
     //        bare nouns (e.g. "頁面數量") get "請提供：" prefix so they read as requests.
     const requirementQuestions = humanizeBaselineKeysInQuestions(
-      allMissingInfo.map((item) => {
-        const s = item.trim();
-        if (/[？?]$/.test(s)) return s;
-        if (/^是否|^需要|^有沒有|^是不是|^是否有/.test(s)) return `${s}？`;
-        if (/^請/.test(s)) return s.endsWith("？") ? s : `${s}？`;
-        return `請提供：${s}`;
-      }),
+      locale === "en"
+        ? buildEnglishQuestions(allMissingInfo)
+        : allMissingInfo.map((item) => {
+            const s = item.trim();
+            if (/[？?]$/.test(s)) return s;
+            if (/^是否|^需要|^有沒有|^是不是|^是否有/.test(s)) return `${s}？`;
+            if (/^請/.test(s)) return s.endsWith("？") ? s : `${s}？`;
+            return `請提供：${s}`;
+          }),
     );
 
     // Build project-level risk flags
     const projectRiskFlags = [];
     if (modules.some((m) => m.riskBuffer > 0)) {
-      projectRiskFlags.push("包含第三方 API 或高風險整合，已套用風險係數");
+      projectRiskFlags.push(RISK_FLAGS.thirdParty[locale === "en" ? "en" : "zh"]);
     }
     if (modules.some((m) => m.baselineKey === "payment_integration")) {
-      projectRiskFlags.push("金流模組 QA 比重高，建議預留沙箱測試時間");
+      projectRiskFlags.push(RISK_FLAGS.payment[locale === "en" ? "en" : "zh"]);
     }
     if (modules.some((m) => m.baselineKey === "rbac")) {
-      projectRiskFlags.push("權限系統複雜度易被低估，建議在 kickoff 前確認角色矩陣");
+      projectRiskFlags.push(RISK_FLAGS.rbac[locale === "en" ? "en" : "zh"]);
     }
     if (modules.some((m) => m.baselineKey === "share_link" || m.baselineKey === "status_tracking")) {
-      projectRiskFlags.push("含公開分享或狀態追蹤，需確認存取控制與資安需求");
+      projectRiskFlags.push(RISK_FLAGS.sharing[locale === "en" ? "en" : "zh"]);
     }
     if (modules.some((m) => m.baselineKey?.startsWith("ai_"))) {
-      projectRiskFlags.push("AI 功能受 LLM provider 穩定性影響，建議設計 fallback 機制");
+      projectRiskFlags.push(RISK_FLAGS.ai[locale === "en" ? "en" : "zh"]);
     }
     if (overallConfidence < 0.65) {
-      projectRiskFlags.push("整體需求描述不足，估算範圍較大，建議補充 missingInfo 後重新估算");
+      projectRiskFlags.push(RISK_FLAGS.vague[locale === "en" ? "en" : "zh"]);
     }
 
     const rawResponse = {
@@ -401,7 +407,7 @@ export async function estimateModulesCore({
       missingInfo: allMissingInfo,
       requirementQuestions,
       projectRiskFlags,
-      projectRiskSummary: buildProjectRiskSummary(projectRiskFlags),
+      projectRiskSummary: buildRiskSummary(projectRiskFlags, locale) ?? buildProjectRiskSummary(projectRiskFlags),
       overallConfidence,
       overallComplexity: normalizeTextField(parsed?.overallComplexity) || "standard",
       estimationNotes: normalizeTextField(parsed?.estimationNotes),
