@@ -1,6 +1,6 @@
 import prisma from "../lib/prisma.js";
 import crypto from "crypto";
-import { isValidTradeSha } from "../lib/newebpaySignature.js";
+import { checkoutLangType, isValidTradeSha, receiptEmail } from "../lib/newebpaySignature.js";
 
 const NEWEBPAY_HASH_KEY = process.env.NEWEBPAY_HASH_KEY;
 const NEWEBPAY_HASH_IV = process.env.NEWEBPAY_HASH_IV;
@@ -177,7 +177,8 @@ export async function createTopupOrder(req, res) {
       ReturnURL: returnUrl.toString(), // Backend redirect proxy
       NotifyURL: WEBHOOK_URL, // Server webhook
       ClientBackURL: buildFrontendRedirectUrl(safeReturnPath), // Back to shop button
-      Email: "",
+      Email: receiptEmail(req.user?.email),
+      LangType: checkoutLangType(safeReturnPath),
       LoginType: 0,
     };
 

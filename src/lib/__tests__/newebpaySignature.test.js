@@ -3,7 +3,7 @@
  * Run with: node src/lib/__tests__/newebpaySignature.test.js
  */
 import assert from "node:assert/strict";
-import { isValidTradeSha, tradeSha } from "../newebpaySignature.js";
+import { checkoutLangType, isValidTradeSha, receiptEmail, tradeSha } from "../newebpaySignature.js";
 
 let passed = 0;
 const test = (name, fn) => {
@@ -35,5 +35,17 @@ test("rejects missing or non-string input", () => {
 test("fails closed when our keys are not configured", () => {
   const sha = tradeSha(info, undefined, undefined);
   assert.equal(isValidTradeSha(info, sha, { hashKey: undefined, hashIv: undefined }), false);
+});
+test("checkout page is English only for the English site", () => {
+  assert.equal(checkoutLangType("/en/admin/settings?tab=billing"), "en");
+  assert.equal(checkoutLangType("/en"), "en");
+  assert.equal(checkoutLangType("/admin/settings?tab=billing"), "zh-tw");
+  assert.equal(checkoutLangType("/english/admin"), "zh-tw");
+  assert.equal(checkoutLangType(undefined), "zh-tw");
+});
+test("receipt email is passed on only when it looks like an email", () => {
+  assert.equal(receiptEmail(" a@b.co "), "a@b.co");
+  assert.equal(receiptEmail("not an email"), "");
+  assert.equal(receiptEmail(undefined), "");
 });
 console.log(`\n${passed} passed`);
